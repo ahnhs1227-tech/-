@@ -186,6 +186,15 @@
     padding:8px;
     letter-spacing:.5px;
   }
+  #finalAmount{
+    display:inline-block;
+    min-width:90px;
+    outline:none;
+    border-bottom:1px dashed #999;
+    text-align:right;
+    padding:0 2px;
+  }
+  #finalAmount:focus{ background:#fffde7; }
 
   /* items table */
   table.items{
@@ -361,7 +370,9 @@
 
   <div class="amount-bar">
     <div class="amount-label">견적금액<br><span style="font-weight:400;font-size:11px;">(VAT포함)</span></div>
-    <div class="amount-value" id="amountText">일금 영원정(₩0)</div>
+    <div class="amount-value" id="amountText">
+      일금 <span id="amountKorean">영</span>원정(₩<span id="finalAmount" contenteditable="true">0</span>)
+    </div>
   </div>
 
   <table class="items" id="itemsTable">
@@ -542,10 +553,37 @@ function calcAll(){
   document.getElementById('sumTax').textContent = fmt(sumTax);
   document.getElementById('sumTotal').textContent = fmt(sumTotal);
 
-  const koreanText = numberToKorean(sumTotal);
-  document.getElementById('amountText').textContent =
-    `일금 ${koreanText}원정(₩${fmt(sumTotal)})`;
+  // 품목이 변경되면 최종 견적금액은 계산값으로 다시 맞춤
+  setFinalAmount(sumTotal);
 }
+
+
+function setFinalAmount(value){
+  const amount = Math.round(parseNum(value));
+  document.getElementById('finalAmount').textContent = fmt(amount);
+  document.getElementById('amountKorean').textContent = numberToKorean(amount);
+}
+
+function updateFinalAmountFromEdit(){
+  const cell = document.getElementById('finalAmount');
+  const amount = Math.round(parseNum(cell.textContent));
+  document.getElementById('amountKorean').textContent = numberToKorean(amount);
+}
+
+// 최종 견적금액 숫자만 직접 수정 가능. 수정 즉시 한글 금액 연동
+const finalAmountCell = document.getElementById('finalAmount');
+finalAmountCell.addEventListener('input', updateFinalAmountFromEdit);
+finalAmountCell.addEventListener('blur', function(){
+  const amount = Math.round(parseNum(this.textContent));
+  this.textContent = fmt(amount);
+  document.getElementById('amountKorean').textContent = numberToKorean(amount);
+});
+finalAmountCell.addEventListener('keydown', function(e){
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    this.blur();
+  }
+});
 
 // initial sample row (from the uploaded reference, editable)
 addRow('품목명을 입력하세요', '규격', 'EA', 1, 0);
