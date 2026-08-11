@@ -224,10 +224,10 @@
     margin-top:0;
     table-layout:fixed;
   }
-  /* 품명 칸은 가장 넓게, 나머지 칸은 필요한 폭만 사용 */
+  /* 품명은 남는 공간을 우선 사용하고, 규격은 내용 길이에 따라 자동 확장 */
   table.items th:nth-child(1), table.items td:nth-child(1){ width:34px; }
-  table.items th:nth-child(2), table.items td:nth-child(2){ width:auto; }
-  table.items th:nth-child(3), table.items td:nth-child(3){ width:76px !important; }
+  table.items th:nth-child(2), table.items td:nth-child(2){ width:auto; min-width:190px; }
+  table.items th:nth-child(3), table.items td:nth-child(3){ width:var(--spec-col-width, 76px) !important; }
   table.items th:nth-child(4), table.items td:nth-child(4){ width:42px !important; }
   table.items th:nth-child(5), table.items td:nth-child(5){ width:46px !important; }
   table.items th:nth-child(6), table.items td:nth-child(6){ width:72px !important; }
@@ -249,7 +249,8 @@
   }
   table.items td.num[contenteditable]{ outline:none; }
   table.items td[contenteditable]:focus{ background:#fffde7; }
-  table.items td.name{ text-align:left; }
+  table.items td.name{ text-align:left; overflow-wrap:anywhere; }
+  table.items td.spec{ white-space:normal; overflow-wrap:anywhere; }
   table.items td.readonly{ background:#fbfbfb; color:#333; }
   table.items tfoot td{
     font-weight:800;
@@ -337,10 +338,10 @@
     table.items th:nth-child(10),
     table.items td:nth-child(10){ display:none !important; }
 
-    /* A4 폭에서도 품명이 가장 넓게 유지되도록 재배분 */
+    /* PDF에서도 품명을 우선 확보하되 규격은 입력 내용에 맞춰 유동적으로 확장 */
     table.items th:nth-child(1), table.items td:nth-child(1){ width:28px !important; }
-    table.items th:nth-child(2), table.items td:nth-child(2){ width:auto !important; }
-    table.items th:nth-child(3), table.items td:nth-child(3){ width:65px !important; }
+    table.items th:nth-child(2), table.items td:nth-child(2){ width:auto !important; min-width:170px; }
+    table.items th:nth-child(3), table.items td:nth-child(3){ width:var(--spec-col-width, 76px) !important; }
     table.items th:nth-child(4), table.items td:nth-child(4){ width:34px !important; }
     table.items th:nth-child(5), table.items td:nth-child(5){ width:38px !important; }
     table.items th:nth-child(6), table.items td:nth-child(6){ width:66px !important; }
@@ -497,6 +498,46 @@ function bindRowEvents(tr){
     supplyCell.addEventListener('input', calcAll);
     supplyCell.addEventListener('blur', calcAll);
   }
+
+  // 품명/규격 입력 길이가 바뀔 때 열 폭을 다시 배분
+  const nameCell = tr.querySelector('.name');
+  const specCell = tr.querySelector('.spec') || tr.children[2];
+  [nameCell, specCell].forEach(cell=>{
+    if(!cell) return;
+    cell.addEventListener('input', adjustNameSpecColumns);
+    cell.addEventListener('blur', adjustNameSpecColumns);
+  });
+}
+
+// 품명은 우선적으로 넓게 유지하고, 규격이 길 때만 필요한 만큼 규격 열을 확장한다.
+// 규격이 짧아지면 남는 공간은 자동으로 다시 품명 열이 가져간다.
+function adjustNameSpecColumns(){
+  const table = document.querySelector('table.items');
+  if(!table) return;
+
+  const specs = Array.from(document.querySelectorAll('#itemsBody tr')).map(tr => {
+    const cell = tr.querySelector('.spec') || tr.children[2];
+    return (cell?.textContent || '').trim();
+  });
+
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:12.5px "Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;';
+  document.body.appendChild(probe);
+
+  let required = 65;
+  for(const text of specs){
+    probe.textContent = text || '규격';
+    required = Math.max(required, Math.ceil(probe.getBoundingClientRect().width) + 18);
+  }
+  probe.remove();
+
+  // 지나치게 긴 규격 때문에 품명 칸이 희생되지 않도록 상한을 둔다.
+  // 일반적인 규격은 한 줄로 충분히 늘어나고, 아주 긴 경우에만 규격이 줄바꿈된다.
+  const tableWidth = table.getBoundingClientRect().width || 800;
+  const maxSpec = Math.max(90, Math.min(155, Math.floor(tableWidth * 0.20)));
+  const specWidth = Math.max(65, Math.min(required, maxSpec));
+
+  table.style.setProperty('--spec-col-width', specWidth + 'px');
 }
 
 function makeRow(name="", spec="", unit="", qty="", price=""){
@@ -505,7 +546,7 @@ function makeRow(name="", spec="", unit="", qty="", price=""){
   tr.innerHTML = `
     <td class="num readonly rownum">${rowCount}</td>
     <td class="name" contenteditable="true">${name}</td>
-    <td contenteditable="true">${spec}</td>
+    <td class="spec" contenteditable="true">${spec}</td>
     <td contenteditable="true">${unit}</td>
     <td class="num" contenteditable="true" data-role="qty">${qty}</td>
     <td class="num" contenteditable="true" data-role="price">${price}</td>
@@ -523,6 +564,7 @@ function addRow(name, spec, unit, qty, price){
   body.appendChild(makeRow(name, spec, unit, qty, price));
   renumber();
   calcAll();
+  adjustNameSpecColumns();
 }
 
 function delRow(btn){
@@ -530,6 +572,7 @@ function delRow(btn){
   tr.parentNode.removeChild(tr);
   renumber();
   calcAll();
+  adjustNameSpecColumns();
 }
 
 function renumber(){
@@ -686,6 +729,10 @@ function saveEditableFile(){
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
 
+
+window.addEventListener('resize', adjustNameSpecColumns);
+window.addEventListener('beforeprint', adjustNameSpecColumns);
+
 // 새 템플릿인지, 이전에 저장한 견적서를 다시 연 것인지 구분
 (function initializeDocument(){
   const isSavedEstimate = document.documentElement.getAttribute('data-saved-estimate') === 'true';
@@ -696,11 +743,13 @@ function saveEditableFile(){
     rowCount = existingRows.length;
     existingRows.forEach(bindRowEvents);
     renumber();
+    adjustNameSpecColumns();
     return;
   }
 
   // 처음 여는 새 견적서에만 샘플 행과 오늘 날짜/문서번호를 생성
   addRow('품목명을 입력하세요', '규격', 'EA', 1, 0);
+  adjustNameSpecColumns();
 
   const today = new Date();
   document.getElementById('y').textContent = today.getFullYear();
