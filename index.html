@@ -80,7 +80,7 @@
     padding-top:8px;
     white-space:nowrap;
   }
-  .docno span[contenteditable]{ outline:none; border-bottom:1px dashed #aaa; }
+  .docno span[contenteditable]{ outline:none; border-bottom:none; }
 
   .meta-row{
     display:flex;
@@ -89,7 +89,7 @@
     margin-bottom:10px;
     gap:4px;
   }
-  .meta-row span[contenteditable]{ outline:none; border-bottom:1px dashed #aaa; padding:0 2px; min-width:10px; display:inline-block; }
+  .meta-row span[contenteditable]{ outline:none; border-bottom:none; padding:0 2px; min-width:10px; display:inline-block; }
 
   .header-grid{
     display:flex;
@@ -104,7 +104,7 @@
     font-size:16px;
     margin-bottom:22px;
   }
-  .date-line span[contenteditable]{ outline:none; border-bottom:1px dashed #aaa; padding:0 2px; }
+  .date-line span[contenteditable]{ outline:none; border-bottom:none; padding:0 2px; }
   .recipient{
     font-size:19px;
     font-weight:700;
@@ -234,15 +234,14 @@
   table.items th:nth-child(7), table.items td:nth-child(7){ width:82px !important; }
   table.items th:nth-child(8), table.items td:nth-child(8){ width:68px !important; }
   table.items th:nth-child(9), table.items td:nth-child(9){ width:82px !important; }
-  table.items th:nth-child(10), table.items td:nth-child(10){ width:20px !important; }
   table.items th{
-    border:1px solid var(--ink);
+    border:1px solid var(--line);
     background:#f4f4f4;
     padding:8px 4px;
     font-weight:700;
   }
   table.items td{
-    border:1px solid var(--line-light);
+    border:1px solid var(--line);
     padding:6px 6px;
     text-align:center;
     height:30px;
@@ -256,11 +255,39 @@
     font-weight:800;
     background:#f7f7f7;
   }
-  .del-btn{
-    border:none;background:transparent;color:#c0392b;cursor:pointer;font-size:13px;
-    visibility:hidden;
+  .rownum{ position:relative; }
+  .delete-col{
+    width:48px !important;
+    min-width:48px !important;
+    max-width:48px !important;
+    padding:3px !important;
+    background:#fff !important;
+    text-align:center !important;
   }
-  table.items tr:hover .del-btn{ visibility:visible; }
+  th.delete-col{
+    font-size:11px;
+    color:#777;
+    background:#f4f4f4 !important;
+  }
+  .del-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:34px;
+    height:24px;
+    border:1px solid #c0392b;
+    background:#fff;
+    color:#c0392b;
+    cursor:pointer;
+    font-family:inherit;
+    font-size:11px;
+    font-weight:700;
+    line-height:1;
+    padding:0;
+    border-radius:4px;
+    white-space:nowrap;
+  }
+  .del-btn:hover{ background:#fff1ef; }
 
   .add-row-wrap{ margin:8px 0 16px 0; }
   .add-row-wrap button{
@@ -278,7 +305,7 @@
   /* footer info */
   .foot-grid{
     display:flex;
-    border:1px solid var(--ink);
+    border:1px solid var(--line);
     margin-top:6px;
     font-size:12.5px;
   }
@@ -291,7 +318,7 @@
     justify-content:center;
     writing-mode: vertical-rl;
     letter-spacing:4px;
-    border-right:1px solid var(--ink);
+    border-right:1px solid var(--line);
   }
   .foot-note-body{
     flex:1;
@@ -302,17 +329,29 @@
   table.foot-terms{
     border-collapse:collapse;
     width:280px;
+    /* 바깥 테두리는 .foot-grid가 담당해 선이 겹치지 않게 함 */
+    border:0;
   }
   table.foot-terms td{
-    border:1px solid var(--ink);
+    border:0;
     padding:6px 8px;
     font-size:12.5px;
+  }
+  /* 비고 영역과 우측 조건표 사이의 세로선 */
+  table.foot-terms tr td:first-child{
+    border-left:1px solid var(--line);
+  }
+  /* 납기일/유효일/결제조건/참조 사이의 가로선 */
+  table.foot-terms tr + tr td{
+    border-top:1px solid var(--line);
   }
   table.foot-terms td.label{
     background:#f4f4f4;
     font-weight:700;
     width:80px;
     text-align:center;
+    /* 라벨과 입력칸 사이의 세로선 */
+    border-right:1px solid var(--line);
   }
   table.foot-terms td[contenteditable]{ outline:none; }
 
@@ -328,31 +367,424 @@
     margin:10mm;
   }
 
+  @page{
+    size:A4 portrait;
+    margin:10mm;
+  }
+
   @media print{
-    body{ background:#fff; padding:0; margin:0; }
-    .toolbar{ display:none; }
-    .sheet{ border:none; padding:0; width:100%; max-width:none; }
-    .del-btn, .add-row-wrap, .rounding-buttons{ display:none !important; }
+    html, body{
+      background:#fff !important;
+      margin:0 !important;
+      padding:0 !important;
+      -webkit-print-color-adjust:exact;
+      print-color-adjust:exact;
+    }
 
-    /* PDF에서는 삭제용 마지막 열 자체를 제거해 품명 공간 확보 */
-    table.items th:nth-child(10),
-    table.items td:nth-child(10){ display:none !important; }
+    .sheet{
+      margin:0 auto !important;
+      border:0 !important;
+    }
 
-    /* PDF에서도 품명을 우선 확보하되 규격은 입력 내용에 맞춰 유동적으로 확장 */
-    table.items th:nth-child(1), table.items td:nth-child(1){ width:28px !important; }
-    table.items th:nth-child(2), table.items td:nth-child(2){ width:auto !important; min-width:170px; }
-    table.items th:nth-child(3), table.items td:nth-child(3){ width:var(--spec-col-width, 76px) !important; }
-    table.items th:nth-child(4), table.items td:nth-child(4){ width:34px !important; }
-    table.items th:nth-child(5), table.items td:nth-child(5){ width:38px !important; }
-    table.items th:nth-child(6), table.items td:nth-child(6){ width:66px !important; }
-    table.items th:nth-child(7), table.items td:nth-child(7){ width:76px !important; }
-    table.items th:nth-child(8), table.items td:nth-child(8){ width:62px !important; }
-    table.items th:nth-child(9), table.items td:nth-child(9){ width:76px !important; }
+    .toolbar{ display:none !important; }
 
-    /* 합계 행은 삭제 열이 사라진 상태에서도 자연스럽게 맞춤 */
-    table.items tfoot td:last-child{ display:none !important; }
+    /* 조작용 UI는 인쇄/PDF에서 공간까지 완전히 제거 */
+    .del-btn,
+    .delete-col,
+    .rounding-buttons,
+    .add-row-wrap,
+    .save-editable-btn{
+      display:none !important;
+    }
+
+    table.items{ width:100% !important; }
+    .amount-value{ justify-content:center !important; }
+
+    /*
+      PDF에서 선이 겹쳐 두꺼워지는 현상을 막기 위해
+      collapse 대신 separate를 사용하고, 표는 위/왼쪽 선만,
+      각 셀은 오른쪽/아래쪽 선만 그린다.
+      이렇게 하면 모든 경계선이 정확히 한 번만 그려진다.
+    */
+    table.supplier,
+    table.items{
+      border-collapse:separate !important;
+      border-spacing:0 !important;
+      border-top:1px solid var(--line) !important;
+      border-left:1px solid var(--line) !important;
+      border-right:0 !important;
+      border-bottom:0 !important;
+    }
+
+    table.supplier td, table.supplier th,
+    table.items th, table.items td{
+      border:0 !important;
+      border-right:1px solid var(--line) !important;
+      border-bottom:1px solid var(--line) !important;
+    }
+
+    /* 하단 비고/납기일 영역도 모든 선을 동일한 1px로 통일 */
+    .foot-grid{
+      border:1px solid var(--line) !important;
+    }
+    .foot-note-label{
+      border-right:1px solid var(--line) !important;
+    }
+    table.foot-terms{
+      border:0 !important;
+      border-collapse:separate !important;
+      border-spacing:0 !important;
+    }
+    table.foot-terms td{ border:0 !important; }
+    table.foot-terms tr td:first-child{
+      border-left:1px solid var(--line) !important;
+    }
+    table.foot-terms tr + tr td{
+      border-top:1px solid var(--line) !important;
+    }
+    table.foot-terms td.label{
+      border-right:1px solid var(--line) !important;
+    }
+
+    /* 최종 견적금액 박스만 의도적으로 굵게 */
+    .amount-bar{
+      border:2px solid var(--ink) !important;
+    }
+    .amount-label{
+      border-right:2px solid var(--ink) !important;
+    }
+
+    /* 편집 표시용 밑줄/점선은 인쇄하지 않음 */
+    .docno span[contenteditable],
+    .meta-row span[contenteditable],
+    .date-line span[contenteditable],
+    [contenteditable="true"]{
+      outline:none !important;
+      box-shadow:none !important;
+      text-decoration:none !important;
+    }
+    .docno span[contenteditable],
+    .meta-row span[contenteditable],
+    .date-line span[contenteditable]{
+      border-bottom:none !important;
+    }
   }
 </style>
+
+
+
+
+
+
+
+
+
+
+<style id="final-clean-style">
+:root{
+  --quote-strong:#E8E0CC;
+  --quote-mid:#F2ECDC;
+  --quote-light:#F9F6EB;
+}
+
+/* 공급자 영역 비율 */
+.left-block{
+  width:338px !important;
+}
+table.supplier{
+  flex:0 0 462px !important;
+  width:462px !important;
+}
+
+/* 견적금액(VAT포함) */
+.amount-label{
+  background:var(--quote-strong) !important;
+  font-size:15px !important;
+  text-align:center !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+/* 주요 헤더 */
+table.items thead th,
+table.supplier .side-label,
+.foot-note-label{
+  background:var(--quote-mid) !important;
+}
+
+/* 일반 라벨 */
+table.supplier .label,
+table.foot-terms td.label{
+  background:var(--quote-light) !important;
+}
+
+/* 품목표 합계 행: 헤더와 같은 톤 */
+table.items tfoot td{
+  background:var(--quote-mid) !important;
+}
+
+/* 본문 셀은 흰색을 기본값으로 명확히 고정 */
+table.items tbody td{
+  background:#fff !important;
+}
+
+/* 요청사항:
+   1. No. 숫자칸
+   2. 공급가액 본문칸
+   을 무조건 흰색으로 */
+table.items tbody td:nth-child(1),
+table.items tbody td:nth-child(7){
+  background:#fff !important;
+}
+
+/* 합계 행에서 세액/합계 숫자칸은 흰색 */
+table.items tfoot td:nth-last-child(2),
+table.items tfoot td:last-child{
+  background:#fff !important;
+}
+
+/* 공급가액 합계 숫자칸도 다른 숫자칸과 시각적으로 맞추기 위해 흰색 */
+table.items tfoot td:nth-last-child(3){
+  background:#fff !important;
+}
+
+/* 삭제 버튼은 표 밖에서만 보이도록 기존 구조 유지 */
+.items-wrap{
+  position:relative;
+}
+.row-delete-overlay{
+  position:absolute;
+  left:100%;
+  top:0;
+  margin-left:6px;
+  width:54px;
+  pointer-events:none;
+  border:none !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  outline:none !important;
+}
+.row-delete-btn{
+  position:absolute;
+  left:0;
+  width:48px;
+  height:24px;
+  transform:translateY(-50%);
+  border:1px solid #c0392b;
+  background:#fff;
+  color:#c0392b;
+  border-radius:4px;
+  font-family:inherit;
+  font-size:11px;
+  font-weight:700;
+  line-height:1;
+  cursor:pointer;
+  pointer-events:auto;
+}
+.row-delete-btn:hover{
+  background:#fff3f1;
+}
+
+/* 예전 삭제 전용 열이 남아 있어도 표시하지 않음 */
+.delete-col,
+table.items th:nth-child(n+10),
+table.items td:nth-child(n+10){
+  display:none !important;
+}
+
+/* 편집 가능한 상단 필드의 불필요한 점선/밑줄 제거 */
+.docno span[contenteditable],
+.meta-row span[contenteditable],
+.date-line span[contenteditable]{
+  outline:none !important;
+  border-bottom:none !important;
+  box-shadow:none !important;
+  text-decoration:none !important;
+}
+
+/* 인쇄/PDF */
+@media print{
+  html, body{
+    background:#fff !important;
+    margin:0 !important;
+    padding:0 !important;
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+  }
+
+  /* PDF의 회색 외곽 박스 완전 제거 */
+  .sheet{
+    margin:0 auto !important;
+    border:0 !important;
+    outline:0 !important;
+    box-shadow:none !important;
+  }
+
+  /* 조작용 UI는 공간까지 제거 */
+  .toolbar,
+  .rounding-buttons,
+  .add-row-wrap,
+  .save-editable-btn,
+  .row-delete-overlay,
+  .del-btn,
+  .delete-col{
+    display:none !important;
+  }
+
+  /* 화면 레이아웃 유지 */
+  table.items{
+    width:100% !important;
+  }
+  .amount-value{
+    justify-content:center !important;
+  }
+
+  /* 상단 편집 표시 제거 */
+  .docno span[contenteditable],
+  .meta-row span[contenteditable],
+  .date-line span[contenteditable],
+  [contenteditable="true"]{
+    outline:none !important;
+    box-shadow:none !important;
+    text-decoration:none !important;
+  }
+  .docno span[contenteditable],
+  .meta-row span[contenteditable],
+  .date-line span[contenteditable]{
+    border-bottom:none !important;
+  }
+
+  /* 배경색 인쇄 유지 */
+  .amount-label,
+  table.items thead th,
+  table.supplier .side-label,
+  .foot-note-label,
+  table.supplier .label,
+  table.foot-terms td.label,
+  table.items tfoot td{
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+  }
+
+  /* 요청 셀은 PDF에서도 확실히 흰색 */
+  table.items tbody td,
+  table.items tbody td:nth-child(1),
+  table.items tbody td:nth-child(7),
+  table.items tfoot td:nth-last-child(3),
+  table.items tfoot td:nth-last-child(2),
+  table.items tfoot td:last-child{
+    background:#fff !important;
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+  }
+}
+</style>
+
+
+<style id="print-header-ratio-lock">
+@media print{
+  .header-grid{
+    display:flex !important;
+    width:100% !important;
+    gap:14px !important;
+    align-items:stretch !important;
+  }
+
+  /* 화면에서 측정한 비율을 그대로 사용 */
+  .left-block{
+    flex:0 0 var(--print-left-ratio, 41.5%) !important;
+    width:var(--print-left-ratio, 41.5%) !important;
+    min-width:0 !important;
+    max-width:none !important;
+  }
+
+  table.supplier{
+    flex:1 1 0 !important;
+    width:auto !important;
+    min-width:0 !important;
+    max-width:none !important;
+    table-layout:auto !important;
+  }
+}
+</style>
+
+<script>
+(function(){
+  function lockPrintHeaderRatio(){
+    const grid = document.querySelector('.header-grid');
+    const left = document.querySelector('.left-block');
+    const supplier = document.querySelector('table.supplier');
+    if(!grid || !left || !supplier) return;
+
+    const gridWidth = grid.getBoundingClientRect().width;
+    const leftWidth = left.getBoundingClientRect().width;
+
+    if(gridWidth > 0 && leftWidth > 0){
+      const ratio = (leftWidth / gridWidth) * 100;
+      document.documentElement.style.setProperty('--print-left-ratio', ratio.toFixed(4) + '%');
+    }
+  }
+
+  window.addEventListener('beforeprint', lockPrintHeaderRatio);
+})();
+</script>
+
+
+<style id="print-border-minimal-fix">
+@media print{
+  /* 기존 표 구조와 선은 그대로 유지 */
+  table.supplier,
+  table.items{
+    border-collapse:collapse !important;
+  }
+
+  table.supplier th,
+  table.supplier td,
+  table.items th,
+  table.items td{
+    border:1px solid var(--line) !important;
+  }
+
+  /* 하단 영역은 바깥 박스 + 내부선이 겹치지 않게 최소 조정 */
+  .foot-grid{
+    border:1px solid var(--line) !important;
+  }
+
+  .foot-note-label{
+    border-right:1px solid var(--line) !important;
+  }
+
+  table.foot-terms{
+    border-collapse:collapse !important;
+    border:0 !important;
+  }
+
+  table.foot-terms td{
+    border:0 !important;
+  }
+
+  table.foot-terms tr td:first-child{
+    border-left:1px solid var(--line) !important;
+  }
+
+  table.foot-terms tr + tr td{
+    border-top:1px solid var(--line) !important;
+  }
+
+  table.foot-terms td.label{
+    border-right:1px solid var(--line) !important;
+  }
+
+  /* 최종 견적금액 부분만 기존처럼 굵게 */
+  .amount-bar{
+    border:2px solid var(--ink) !important;
+  }
+  .amount-label{
+    border-right:2px solid var(--ink) !important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -390,7 +822,7 @@
 
     <table class="supplier">
       <tr>
-        <td class="side-label" rowspan="4">공&nbsp;급&nbsp;자</td>
+        <td class="side-label" rowspan="5">공&nbsp;급&nbsp;자</td>
         <td class="label">등록<br>번호</td>
         <td colspan="3" contenteditable="true">343-25-01141</td>
       </tr>
@@ -414,7 +846,6 @@
         <td contenteditable="true">시각디자인업</td>
       </tr>
       <tr>
-        <td class="side-label" style="border-top:none;"></td>
         <td class="label">TEL</td>
         <td contenteditable="true">010-5676-1812</td>
         <td class="label">FAX</td>
@@ -437,7 +868,8 @@
     </div>
   </div>
 
-  <table class="items" id="itemsTable">
+  <div class="items-wrap">
+<table class="items" id="itemsTable">
     <thead>
       <tr>
         <th style="width:34px;">No.</th>
@@ -449,7 +881,6 @@
         <th style="width:90px;">공급가액</th>
         <th style="width:80px;">세액</th>
         <th style="width:90px;">합계</th>
-        <th style="width:20px;"></th>
       </tr>
     </thead>
     <tbody id="itemsBody">
@@ -460,10 +891,11 @@
         <td class="readonly" id="sumSupply">0</td>
         <td class="readonly" id="sumTax">0</td>
         <td class="readonly" id="sumTotal">0</td>
-        <td></td>
       </tr>
     </tfoot>
   </table>
+<div class="row-delete-overlay" id="rowDeleteOverlay"></div>
+</div>
 
   <div class="add-row-wrap">
     <button onclick="addRow()">+ 품목 추가</button>
@@ -553,7 +985,6 @@ function makeRow(name="", spec="", unit="", qty="", price=""){
     <td class="num" contenteditable="true" data-role="supply">0</td>
     <td class="num readonly" data-role="tax">0</td>
     <td class="num readonly" data-role="total">0</td>
-    <td><button class="del-btn" onclick="delRow(this)">✕</button></td>
   `;
   bindRowEvents(tr);
   return tr;
@@ -569,7 +1000,14 @@ function addRow(name, spec, unit, qty, price){
 
 function delRow(btn){
   const tr = btn.closest('tr');
-  tr.parentNode.removeChild(tr);
+  const itemName = (tr.querySelector('.name')?.textContent || '').trim();
+  const message = itemName
+    ? `“${itemName}” 품목을 삭제하시겠습니까?`
+    : '이 품목을 삭제하시겠습니까?';
+
+  if(!window.confirm(message)) return;
+
+  tr.remove();
   renumber();
   calcAll();
   adjustNameSpecColumns();
@@ -763,6 +1201,64 @@ window.addEventListener('beforeprint', adjustNameSpecColumns);
   const hh = String(today.getHours()).padStart(2, '0');
   const mi = String(today.getMinutes()).padStart(2, '0');
   document.getElementById('docno').textContent = `E${yy}${mm}-${dd}${hh}${mi}`;
+})();
+</script>
+
+
+<script>
+(function(){
+  function getItemsTable(){
+    return document.querySelector('table.items');
+  }
+  function getBodyRows(){
+    const table = getItemsTable();
+    if(!table) return [];
+    const tb = table.tBodies && table.tBodies[0];
+    return tb ? Array.from(tb.rows) : [];
+  }
+  window.refreshDeleteOverlay = function(){
+    const table = getItemsTable();
+    const overlay = document.getElementById('rowDeleteOverlay');
+    if(!table || !overlay) return;
+    overlay.innerHTML = '';
+    const tableRect = table.getBoundingClientRect();
+    getBodyRows().forEach((tr)=>{
+      const rect = tr.getBoundingClientRect();
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'row-delete-btn';
+      btn.textContent = '삭제';
+      btn.style.top = ((rect.top - tableRect.top) + rect.height/2) + 'px';
+      btn.addEventListener('click', function(){
+        const nameCell = tr.querySelector('td.name');
+        const itemName = nameCell ? nameCell.textContent.trim() : '';
+        const msg = itemName ? `“${itemName}” 품목을 삭제하시겠습니까?` : '이 품목을 삭제하시겠습니까?';
+        if(confirm(msg)){
+          tr.remove();
+          if(typeof window.recalc === 'function') window.recalc();
+          if(typeof window.recalcAll === 'function') window.recalcAll();
+          if(typeof window.renumber === 'function') window.renumber();
+          requestAnimationFrame(window.refreshDeleteOverlay);
+        }
+      });
+      overlay.appendChild(btn);
+    });
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    requestAnimationFrame(window.refreshDeleteOverlay);
+    setTimeout(window.refreshDeleteOverlay, 150);
+  });
+  window.addEventListener('resize', window.refreshDeleteOverlay);
+
+  // observe row changes
+  document.addEventListener('DOMContentLoaded', function(){
+    const table = getItemsTable();
+    if(table && window.MutationObserver){
+      const obs = new MutationObserver(()=>requestAnimationFrame(window.refreshDeleteOverlay));
+      obs.observe(table, {childList:true, subtree:true});
+    }
+  });
 })();
 </script>
 
