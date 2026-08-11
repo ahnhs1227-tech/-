@@ -737,12 +737,26 @@ table.items td:nth-child(n+10){
 }
 </style>
 
+
+<style id="toolbar-controls-style">
+.toolbar{
+  flex-wrap:wrap;
+}
+</style>
+
 </head>
 <body>
 
 <div class="toolbar">
+  <button type="button" class="secondary" onclick="document.getElementById('logoFileInput').click()">🖼 로고 변경</button>
+  <button type="button" class="secondary" onclick="document.getElementById('stampFileInput').click()">🔴 도장 변경</button>
+  <button type="button" class="secondary" onclick="document.getElementById('bgColorInput').click()">🎨 배경색 변경</button>
   <button type="button" onclick="saveEditableFile()">💾 수정가능 파일 저장</button>
   <button class="secondary" onclick="window.print()">🖨 인쇄 / PDF 저장</button>
+
+  <input id="logoFileInput" type="file" accept="image/*" hidden>
+  <input id="stampFileInput" type="file" accept="image/*" hidden>
+  <input id="bgColorInput" type="color" value="#E8E0CC" hidden>
 </div>
 
 <div class="sheet">
@@ -1211,6 +1225,88 @@ window.addEventListener('beforeprint', adjustNameSpecColumns);
       obs.observe(table, {childList:true, subtree:true});
     }
   });
+})();
+</script>
+
+
+<script id="asset-theme-controls">
+(function(){
+  function fileToDataUrl(file, callback){
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e){ callback(e.target.result); };
+    reader.readAsDataURL(file);
+  }
+
+  const logoInput = document.getElementById('logoFileInput');
+  const stampInput = document.getElementById('stampFileInput');
+  const bgInput = document.getElementById('bgColorInput');
+
+  if(logoInput){
+    logoInput.addEventListener('change', function(){
+      fileToDataUrl(this.files && this.files[0], function(dataUrl){
+        const img = document.querySelector('.logo img');
+        if(img) img.src = dataUrl;
+      });
+      this.value = '';
+    });
+  }
+
+  if(stampInput){
+    stampInput.addEventListener('change', function(){
+      fileToDataUrl(this.files && this.files[0], function(dataUrl){
+        document.querySelectorAll('.stamp-img').forEach(function(img){
+          img.src = dataUrl;
+        });
+      });
+      this.value = '';
+    });
+  }
+
+  function hexToRgb(hex){
+    const v = hex.replace('#','').trim();
+    if(!/^[0-9a-fA-F]{6}$/.test(v)) return null;
+    return {
+      r: parseInt(v.slice(0,2),16),
+      g: parseInt(v.slice(2,4),16),
+      b: parseInt(v.slice(4,6),16)
+    };
+  }
+
+  function rgbToHex(r,g,b){
+    const h = n => Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,'0');
+    return '#' + h(r) + h(g) + h(b);
+  }
+
+  function mixWithWhite(hex, whiteRatio){
+    const c = hexToRgb(hex);
+    if(!c) return hex;
+    return rgbToHex(
+      c.r + (255-c.r)*whiteRatio,
+      c.g + (255-c.g)*whiteRatio,
+      c.b + (255-c.b)*whiteRatio
+    );
+  }
+
+  function applyPalette(baseHex){
+    /*
+      사용자가 고른 색을 가장 진한 톤으로 사용하고,
+      기존 디자인처럼 중간/옅은 톤을 자동 생성.
+    */
+    const root = document.documentElement;
+    root.style.setProperty('--quote-strong', baseHex);
+    root.style.setProperty('--quote-mid', mixWithWhite(baseHex, 0.45));
+    root.style.setProperty('--quote-light', mixWithWhite(baseHex, 0.73));
+  }
+
+  if(bgInput){
+    bgInput.addEventListener('input', function(){
+      applyPalette(this.value);
+    });
+    bgInput.addEventListener('change', function(){
+      applyPalette(this.value);
+    });
+  }
 })();
 </script>
 
