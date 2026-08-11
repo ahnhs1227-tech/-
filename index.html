@@ -372,103 +372,7 @@
     margin:10mm;
   }
 
-  @media print{
-    html, body{
-      background:#fff !important;
-      margin:0 !important;
-      padding:0 !important;
-      -webkit-print-color-adjust:exact;
-      print-color-adjust:exact;
-    }
-
-    .sheet{
-      margin:0 auto !important;
-      border:0 !important;
-    }
-
-    .toolbar{ display:none !important; }
-
-    /* 조작용 UI는 인쇄/PDF에서 공간까지 완전히 제거 */
-    .del-btn,
-    .delete-col,
-    .rounding-buttons,
-    .add-row-wrap,
-    .save-editable-btn{
-      display:none !important;
-    }
-
-    table.items{ width:100% !important; }
-    .amount-value{ justify-content:center !important; }
-
-    /*
-      PDF에서 선이 겹쳐 두꺼워지는 현상을 막기 위해
-      collapse 대신 separate를 사용하고, 표는 위/왼쪽 선만,
-      각 셀은 오른쪽/아래쪽 선만 그린다.
-      이렇게 하면 모든 경계선이 정확히 한 번만 그려진다.
-    */
-    table.supplier,
-    table.items{
-      border-collapse:separate !important;
-      border-spacing:0 !important;
-      border-top:1px solid var(--line) !important;
-      border-left:1px solid var(--line) !important;
-      border-right:0 !important;
-      border-bottom:0 !important;
-    }
-
-    table.supplier td, table.supplier th,
-    table.items th, table.items td{
-      border:0 !important;
-      border-right:1px solid var(--line) !important;
-      border-bottom:1px solid var(--line) !important;
-    }
-
-    /* 하단 비고/납기일 영역도 모든 선을 동일한 1px로 통일 */
-    .foot-grid{
-      border:1px solid var(--line) !important;
-    }
-    .foot-note-label{
-      border-right:1px solid var(--line) !important;
-    }
-    table.foot-terms{
-      border:0 !important;
-      border-collapse:separate !important;
-      border-spacing:0 !important;
-    }
-    table.foot-terms td{ border:0 !important; }
-    table.foot-terms tr td:first-child{
-      border-left:1px solid var(--line) !important;
-    }
-    table.foot-terms tr + tr td{
-      border-top:1px solid var(--line) !important;
-    }
-    table.foot-terms td.label{
-      border-right:1px solid var(--line) !important;
-    }
-
-    /* 최종 견적금액 박스만 의도적으로 굵게 */
-    .amount-bar{
-      border:2px solid var(--ink) !important;
-    }
-    .amount-label{
-      border-right:2px solid var(--ink) !important;
-    }
-
-    /* 편집 표시용 밑줄/점선은 인쇄하지 않음 */
-    .docno span[contenteditable],
-    .meta-row span[contenteditable],
-    .date-line span[contenteditable],
-    [contenteditable="true"]{
-      outline:none !important;
-      box-shadow:none !important;
-      text-decoration:none !important;
-    }
-    .docno span[contenteditable],
-    .meta-row span[contenteditable],
-    .date-line span[contenteditable]{
-      border-bottom:none !important;
-    }
-  }
+  
 </style>
 
 
@@ -603,24 +507,42 @@ table.items td:nth-child(n+10){
 }
 
 /* 인쇄/PDF */
+
+</style>
+
+
+<style id="print-header-ratio-lock">
+
+</style>
+
+
+
+
+
+<style id="print-mm-stable">
 @media print{
   html, body{
     background:#fff !important;
     margin:0 !important;
     padding:0 !important;
-    -webkit-print-color-adjust:exact !important;
-    print-color-adjust:exact !important;
   }
 
-  /* PDF의 회색 외곽 박스 완전 제거 */
+  /*
+    A4 인쇄 가능 폭 190mm 안에 화면의 900px 시트를 같은 비율로 축소.
+    화면의 44px 좌우 패딩 비율도 mm로 변환하여 유지.
+  */
   .sheet{
+    width:190mm !important;
+    max-width:190mm !important;
     margin:0 auto !important;
+    padding-left:9.2889mm !important;
+    padding-right:9.2889mm !important;
     border:0 !important;
     outline:0 !important;
     box-shadow:none !important;
   }
 
-  /* 조작용 UI는 공간까지 제거 */
+  /* 조작용 UI만 제거 */
   .toolbar,
   .rounding-buttons,
   .add-row-wrap,
@@ -631,15 +553,75 @@ table.items td:nth-child(n+10){
     display:none !important;
   }
 
-  /* 화면 레이아웃 유지 */
-  table.items{
-    width:100% !important;
+  /*
+    헤더는 화면에서 측정한 비율을 mm 단위 변수로 적용.
+    supplier의 내부 표 레이아웃은 기존 auto를 유지해 찌그러짐 방지.
+  */
+  .header-grid{
+    display:flex !important;
+    width:171.4222mm !important;
+    gap:var(--print-header-gap-mm,2.9556mm) !important;
+    align-items:stretch !important;
   }
-  .amount-value{
-    justify-content:center !important;
+  .left-block{
+    flex:0 0 var(--print-left-mm,71.36mm) !important;
+    width:var(--print-left-mm,71.36mm) !important;
+    min-width:0 !important;
+    max-width:none !important;
+  }
+  table.supplier{
+    flex:0 0 var(--print-supplier-mm,97.10mm) !important;
+    width:var(--print-supplier-mm,97.10mm) !important;
+    min-width:var(--print-supplier-mm,97.10mm) !important;
+    max-width:var(--print-supplier-mm,97.10mm) !important;
+    border-collapse:collapse !important;
+    table-layout:auto !important;
   }
 
-  /* 상단 편집 표시 제거 */
+  /*
+    품목표는 화면에서 실제 측정한 각 열 폭을 mm로 변환해서 그대로 사용.
+    이렇게 하면 PDF에서 브라우저가 px 열 너비를 다시 분배하지 않는다.
+  */
+  table.items{
+    width:171.4222mm !important;
+    table-layout:fixed !important;
+    border-collapse:collapse !important;
+  }
+
+  table.items th:nth-child(1), table.items td:nth-child(1){ width:var(--pcol-1,7.18mm) !important; }
+  table.items th:nth-child(2), table.items td:nth-child(2){ width:var(--pcol-2,45mm) !important; }
+  table.items th:nth-child(3), table.items td:nth-child(3){ width:var(--pcol-3,16mm) !important; }
+  table.items th:nth-child(4), table.items td:nth-child(4){ width:var(--pcol-4,8.87mm) !important; }
+  table.items th:nth-child(5), table.items td:nth-child(5){ width:var(--pcol-5,9.71mm) !important; }
+  table.items th:nth-child(6), table.items td:nth-child(6){ width:var(--pcol-6,15.20mm) !important; }
+  table.items th:nth-child(7), table.items td:nth-child(7){ width:var(--pcol-7,17.31mm) !important; }
+  table.items th:nth-child(8), table.items td:nth-child(8){ width:var(--pcol-8,14.36mm) !important; }
+  table.items th:nth-child(9), table.items td:nth-child(9){ width:var(--pcol-9,17.31mm) !important; }
+
+  /* 하단도 품목표와 동일한 물리 폭으로 고정 */
+  .foot-grid{
+    width:171.4222mm !important;
+  }
+
+  /* 화면에서 사용하던 선 구조를 그대로 사용 */
+  table.supplier td,
+  table.supplier th,
+  table.items th,
+  table.items td{
+    border-width:1px !important;
+    border-style:solid !important;
+    border-color:var(--line) !important;
+  }
+
+  /* 최종 견적금액은 원래 의도대로 굵게 */
+  .amount-bar{
+    border:2px solid var(--ink) !important;
+  }
+  .amount-label{
+    border-right:2px solid var(--ink) !important;
+  }
+
+  /* 편집 표시 제거 */
   .docno span[contenteditable],
   .meta-row span[contenteditable],
   .date-line span[contenteditable],
@@ -653,134 +635,104 @@ table.items td:nth-child(n+10){
   .date-line span[contenteditable]{
     border-bottom:none !important;
   }
-
-  /* 배경색 인쇄 유지 */
-  .amount-label,
-  table.items thead th,
-  table.supplier .side-label,
-  .foot-note-label,
-  table.supplier .label,
-  table.foot-terms td.label,
-  table.items tfoot td{
-    -webkit-print-color-adjust:exact !important;
-    print-color-adjust:exact !important;
-  }
-
-  /* 요청 셀은 PDF에서도 확실히 흰색 */
-  table.items tbody td,
-  table.items tbody td:nth-child(1),
-  table.items tbody td:nth-child(7),
-  table.items tfoot td:nth-last-child(3),
-  table.items tfoot td:nth-last-child(2),
-  table.items tfoot td:last-child{
-    background:#fff !important;
-    -webkit-print-color-adjust:exact !important;
-    print-color-adjust:exact !important;
-  }
 }
 </style>
 
-
-<style id="print-header-ratio-lock">
-@media print{
-  .header-grid{
-    display:flex !important;
-    width:100% !important;
-    gap:14px !important;
-    align-items:stretch !important;
-  }
-
-  /* 화면에서 측정한 비율을 그대로 사용 */
-  .left-block{
-    flex:0 0 var(--print-left-ratio, 41.5%) !important;
-    width:var(--print-left-ratio, 41.5%) !important;
-    min-width:0 !important;
-    max-width:none !important;
-  }
-
-  table.supplier{
-    flex:1 1 0 !important;
-    width:auto !important;
-    min-width:0 !important;
-    max-width:none !important;
-    table-layout:auto !important;
-  }
-}
-</style>
-
-<script>
+<script id="print-mm-measure">
 (function(){
-  function lockPrintHeaderRatio(){
-    const grid = document.querySelector('.header-grid');
+  const SHEET_SCREEN_PX = 900;
+  const PRINT_SHEET_MM = 190;
+  const mmPerScreenPx = PRINT_SHEET_MM / SHEET_SCREEN_PX;
+
+  function setMMVar(name, px){
+    if(!Number.isFinite(px) || px <= 0) return;
+    document.documentElement.style.setProperty(name, (px * mmPerScreenPx).toFixed(4) + 'mm');
+  }
+
+  function measurePrintGeometry(){
+    /* 반드시 print media가 적용되기 전 화면 상태에서 측정 */
+    const header = document.querySelector('.header-grid');
     const left = document.querySelector('.left-block');
     const supplier = document.querySelector('table.supplier');
-    if(!grid || !left || !supplier) return;
 
-    const gridWidth = grid.getBoundingClientRect().width;
-    const leftWidth = left.getBoundingClientRect().width;
+    if(header && left && supplier){
+      setMMVar('--print-left-mm', left.getBoundingClientRect().width);
+      setMMVar('--print-supplier-mm', supplier.getBoundingClientRect().width);
 
-    if(gridWidth > 0 && leftWidth > 0){
-      const ratio = (leftWidth / gridWidth) * 100;
-      document.documentElement.style.setProperty('--print-left-ratio', ratio.toFixed(4) + '%');
+      const styles = getComputedStyle(header);
+      const gapPx = parseFloat(styles.columnGap || styles.gap || '14');
+      setMMVar('--print-header-gap-mm', gapPx);
+    }
+
+    const table = document.querySelector('table.items');
+    if(table && table.tHead && table.tHead.rows.length){
+      const cells = Array.from(table.tHead.rows[0].cells).slice(0,9);
+      cells.forEach((cell, index)=>{
+        setMMVar('--pcol-' + (index + 1), cell.getBoundingClientRect().width);
+      });
     }
   }
 
-  window.addEventListener('beforeprint', lockPrintHeaderRatio);
+  window.addEventListener('beforeprint', measurePrintGeometry);
 })();
 </script>
 
 
-<style id="print-border-minimal-fix">
+<style id="pdf-targeted-border-adjust">
+/* 최종금액: ₩ 바로 뒤에 숫자가 붙도록 불필요한 최소폭 제거 */
+#finalAmount{
+  min-width:0 !important;
+  width:auto !important;
+  text-align:left !important;
+  padding:0 !important;
+}
+
+/* 금액 전체는 한 덩어리로 유지 */
+.amount-value{
+  white-space:nowrap !important;
+}
+
+/*
+  PDF에서 실제로 얇게 렌더링되는 부분만 미세 보정.
+  나머지 품목표 선은 기존 1px 그대로 유지한다.
+*/
 @media print{
-  /* 기존 표 구조와 선은 그대로 유지 */
-  table.supplier,
-  table.items{
-    border-collapse:collapse !important;
+  /* No. 열 좌/우 세로 경계만 1.25px로 보정 */
+  table.items thead th:first-child,
+  table.items tbody td:first-child{
+    border-left-width:1.25px !important;
+    border-right-width:1.25px !important;
   }
 
-  table.supplier th,
-  table.supplier td,
-  table.items th,
-  table.items td{
-    border:1px solid var(--line) !important;
-  }
-
-  /* 하단 영역은 바깥 박스 + 내부선이 겹치지 않게 최소 조정 */
+  /* 하단 비고 영역은 DIV/TABLE 혼합 렌더링 때문에 1px이 상대적으로 얇게 저장됨 */
   .foot-grid{
-    border:1px solid var(--line) !important;
+    border-width:1.25px !important;
+    border-style:solid !important;
+    border-color:var(--line) !important;
   }
 
   .foot-note-label{
-    border-right:1px solid var(--line) !important;
-  }
-
-  table.foot-terms{
-    border-collapse:collapse !important;
-    border:0 !important;
-  }
-
-  table.foot-terms td{
-    border:0 !important;
+    border-right-width:1.25px !important;
+    border-right-style:solid !important;
+    border-right-color:var(--line) !important;
   }
 
   table.foot-terms tr td:first-child{
-    border-left:1px solid var(--line) !important;
+    border-left-width:1.25px !important;
+    border-left-style:solid !important;
+    border-left-color:var(--line) !important;
   }
 
   table.foot-terms tr + tr td{
-    border-top:1px solid var(--line) !important;
+    border-top-width:1.25px !important;
+    border-top-style:solid !important;
+    border-top-color:var(--line) !important;
   }
 
   table.foot-terms td.label{
-    border-right:1px solid var(--line) !important;
-  }
-
-  /* 최종 견적금액 부분만 기존처럼 굵게 */
-  .amount-bar{
-    border:2px solid var(--ink) !important;
-  }
-  .amount-label{
-    border-right:2px solid var(--ink) !important;
+    border-right-width:1.25px !important;
+    border-right-style:solid !important;
+    border-right-color:var(--line) !important;
   }
 }
 </style>
