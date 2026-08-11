@@ -806,13 +806,86 @@ a[href^="mailto:"]{
 }
 </style>
 
+
+<style id="ipad-color-panel-style">
+.color-panel{
+  max-width:900px;
+  margin:0 auto 12px auto;
+  padding:12px 14px;
+  border:1px solid #d2d2d2;
+  border-radius:8px;
+  background:#fff;
+  display:none;
+  box-shadow:0 4px 14px rgba(0,0,0,.08);
+  font-size:13px;
+}
+.color-panel.open{ display:block; }
+.color-panel-title{
+  font-weight:700;
+  margin-bottom:10px;
+}
+.color-swatches{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:11px;
+}
+.color-swatch{
+  width:38px;
+  height:38px;
+  border-radius:7px;
+  border:1px solid #aaa;
+  background:var(--swatch);
+  cursor:pointer;
+  padding:0;
+}
+.color-swatch.selected{
+  outline:2px solid #333;
+  outline-offset:2px;
+}
+.color-custom-row{
+  display:flex;
+  gap:7px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.color-custom-row input{
+  width:92px;
+  height:32px;
+  padding:4px 7px;
+  border:1px solid #aaa;
+  border-radius:5px;
+  font-family:inherit;
+  font-size:13px;
+  text-transform:uppercase;
+}
+.color-apply-btn,
+.native-color-btn{
+  height:32px;
+  border:1px solid #888;
+  background:#fff;
+  border-radius:5px;
+  padding:0 10px;
+  font-family:inherit;
+  font-size:12px;
+  cursor:pointer;
+}
+.native-color-btn{
+  margin-top:9px;
+}
+@media print{
+  .color-panel{ display:none !important; }
+}
+.pdf-capture-stage .color-panel{ display:none !important; }
+</style>
+
 </head>
 <body>
 
 <div class="toolbar">
   <button type="button" class="secondary" onclick="document.getElementById('logoFileInput').click()">🖼 로고 변경</button>
   <button type="button" class="secondary" onclick="document.getElementById('stampFileInput').click()">🔴 도장 변경</button>
-  <button type="button" class="secondary" onclick="document.getElementById('bgColorInput').click()">🎨 배경색 변경</button>
+  <button type="button" class="secondary" onclick="toggleColorPanel()">🎨 배경색 변경</button>
   <button type="button" onclick="saveEditableFile()">💾 수정가능 파일 저장</button>
   <button class="secondary" onclick="saveFixedPdf()">📄 고정형 PDF 저장</button>
   <button class="secondary" onclick="window.print()">🖨 인쇄 / PDF 저장</button>
@@ -820,6 +893,27 @@ a[href^="mailto:"]{
   <input id="logoFileInput" type="file" accept="image/*" hidden>
   <input id="stampFileInput" type="file" accept="image/*" hidden>
   <input id="bgColorInput" type="color" value="#E8E0CC" hidden>
+</div>
+
+<div id="colorPanel" class="color-panel" aria-hidden="true">
+  <div class="color-panel-title">배경색 선택</div>
+
+  <div class="color-swatches">
+    <button type="button" class="color-swatch" data-color="#E8E0CC" style="--swatch:#E8E0CC" title="웜 베이지"></button>
+    <button type="button" class="color-swatch" data-color="#E7DED8" style="--swatch:#E7DED8" title="소프트 그레이지"></button>
+    <button type="button" class="color-swatch" data-color="#E4EBEF" style="--swatch:#E4EBEF" title="라이트 블루그레이"></button>
+    <button type="button" class="color-swatch" data-color="#DCECF5" style="--swatch:#DCECF5" title="아이스 블루"></button>
+    <button type="button" class="color-swatch" data-color="#D8E3DC" style="--swatch:#D8E3DC" title="세이지"></button>
+    <button type="button" class="color-swatch" data-color="#E9DFC9" style="--swatch:#E9DFC9" title="크림 베이지"></button>
+  </div>
+
+  <div class="color-custom-row">
+    <label for="colorHexInput">직접 입력</label>
+    <input id="colorHexInput" type="text" inputmode="text" value="#E8E0CC" maxlength="7" spellcheck="false">
+    <button type="button" class="color-apply-btn" onclick="applyHexColor()">적용</button>
+  </div>
+
+  <button type="button" class="native-color-btn" onclick="openNativeColorPicker()">기기 색상 선택기 열기</button>
 </div>
 
 <div class="sheet">
@@ -1516,6 +1610,142 @@ window.addEventListener('beforeprint', adjustNameSpecColumns);
       if(stage) stage.remove();
     }
   };
+})();
+</script>
+
+
+<script id="ipad-color-panel-script">
+(function(){
+  function normalizeHex(value){
+    value = String(value || '').trim();
+    if(!value.startsWith('#')) value = '#' + value;
+    if(/^#[0-9a-fA-F]{6}$/.test(value)) return value.toUpperCase();
+    return null;
+  }
+
+  function hexToRgb(hex){
+    const v = hex.replace('#','');
+    return {
+      r:parseInt(v.slice(0,2),16),
+      g:parseInt(v.slice(2,4),16),
+      b:parseInt(v.slice(4,6),16)
+    };
+  }
+  function rgbToHex(r,g,b){
+    const h=n=>Math.max(0,Math.min(255,Math.round(n))).toString(16).padStart(2,'0');
+    return '#' + h(r)+h(g)+h(b);
+  }
+  function mixWhite(hex,ratio){
+    const c=hexToRgb(hex);
+    return rgbToHex(
+      c.r+(255-c.r)*ratio,
+      c.g+(255-c.g)*ratio,
+      c.b+(255-c.b)*ratio
+    ).toUpperCase();
+  }
+
+  window.applyBackgroundPalette = function(baseHex){
+    const hex = normalizeHex(baseHex);
+    if(!hex) return false;
+
+    const root = document.documentElement;
+
+    /* 기존 완성본의 기본 웜베이지는 정확한 원래 3단계 색상값을 복원 */
+    if(hex === '#E8E0CC'){
+      root.style.setProperty('--quote-strong','#E8E0CC');
+      root.style.setProperty('--quote-mid','#F2ECDC');
+      root.style.setProperty('--quote-light','#F9F6EB');
+    }else{
+      root.style.setProperty('--quote-strong',hex);
+      root.style.setProperty('--quote-mid',mixWhite(hex,.45));
+      root.style.setProperty('--quote-light',mixWhite(hex,.73));
+    }
+
+    const hexInput=document.getElementById('colorHexInput');
+    const nativeInput=document.getElementById('bgColorInput');
+    if(hexInput) hexInput.value=hex;
+    if(nativeInput) nativeInput.value=hex;
+
+    document.querySelectorAll('.color-swatch').forEach(btn=>{
+      btn.classList.toggle('selected',
+        String(btn.dataset.color).toUpperCase()===hex
+      );
+    });
+    return true;
+  };
+
+  window.toggleColorPanel = function(){
+    const panel=document.getElementById('colorPanel');
+    if(!panel) return;
+    const open=!panel.classList.contains('open');
+    panel.classList.toggle('open',open);
+    panel.setAttribute('aria-hidden', open ? 'false':'true');
+  };
+
+  window.applyHexColor = function(){
+    const input=document.getElementById('colorHexInput');
+    if(!input) return;
+    if(!window.applyBackgroundPalette(input.value)){
+      alert('색상은 #E8E0CC 같은 6자리 HEX 형식으로 입력해주세요.');
+    }
+  };
+
+  window.openNativeColorPicker = function(){
+    const input=document.getElementById('bgColorInput');
+    if(!input) return;
+    try{
+      if(typeof input.showPicker === 'function'){
+        input.showPicker();
+      }else{
+        input.style.position='fixed';
+        input.style.left='12px';
+        input.style.bottom='12px';
+        input.style.width='44px';
+        input.style.height='44px';
+        input.style.opacity='0.01';
+        input.hidden=false;
+        input.click();
+        setTimeout(()=>{
+          input.hidden=true;
+          input.removeAttribute('style');
+        },800);
+      }
+    }catch(e){
+      input.hidden=false;
+      input.style.width='44px';
+      input.style.height='36px';
+      input.style.marginTop='8px';
+    }
+  };
+
+  document.addEventListener('DOMContentLoaded',function(){
+    document.querySelectorAll('.color-swatch').forEach(btn=>{
+      btn.addEventListener('click',function(){
+        window.applyBackgroundPalette(this.dataset.color);
+      });
+    });
+
+    const nativeInput=document.getElementById('bgColorInput');
+    if(nativeInput){
+      nativeInput.addEventListener('input',function(){
+        window.applyBackgroundPalette(this.value);
+      });
+      nativeInput.addEventListener('change',function(){
+        window.applyBackgroundPalette(this.value);
+      });
+    }
+
+    const hexInput=document.getElementById('colorHexInput');
+    if(hexInput){
+      hexInput.addEventListener('keydown',function(e){
+        if(e.key==='Enter'){
+          e.preventDefault();
+          window.applyHexColor();
+        }
+      });
+    }
+
+  });
 })();
 </script>
 
