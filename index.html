@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<meta name="format-detection" content="telephone=no,email=no,address=no">
 <title>견적서</title>
 <style>
   :root{
@@ -744,6 +745,67 @@ table.items td:nth-child(n+10){
 }
 </style>
 
+
+<style id="mobile-render-stability">
+html, body, .sheet, .sheet *{
+  -webkit-text-size-adjust:100% !important;
+  text-size-adjust:100% !important;
+}
+a[x-apple-data-detectors],
+a[href^="tel:"],
+a[href^="mailto:"]{
+  color:inherit !important;
+  text-decoration:none !important;
+  font:inherit !important;
+}
+
+/* 고정형 PDF 생성용 복제본 */
+.pdf-capture-stage{
+  position:fixed;
+  left:-20000px;
+  top:0;
+  width:900px;
+  background:#fff;
+  z-index:-9999;
+  pointer-events:none;
+}
+.pdf-capture-stage .sheet{
+  width:900px !important;
+  max-width:900px !important;
+  min-width:900px !important;
+  margin:0 !important;
+  transform:none !important;
+}
+.pdf-capture-stage .toolbar,
+.pdf-capture-stage .rounding-buttons,
+.pdf-capture-stage .add-row-wrap,
+.pdf-capture-stage .save-editable-btn,
+.pdf-capture-stage .row-delete-overlay,
+.pdf-capture-stage .del-btn,
+.pdf-capture-stage .delete-col{
+  display:none !important;
+}
+.pdf-capture-stage [contenteditable="true"]{
+  outline:none !important;
+  box-shadow:none !important;
+  text-decoration:none !important;
+}
+.pdf-capture-stage .docno span[contenteditable],
+.pdf-capture-stage .meta-row span[contenteditable],
+.pdf-capture-stage .date-line span[contenteditable]{
+  border-bottom:none !important;
+}
+</style>
+
+
+<style id="fixed-pdf-outer-border-remove">
+.pdf-capture-stage .sheet{
+  border:none !important;
+  outline:none !important;
+  box-shadow:none !important;
+}
+</style>
+
 </head>
 <body>
 
@@ -752,6 +814,7 @@ table.items td:nth-child(n+10){
   <button type="button" class="secondary" onclick="document.getElementById('stampFileInput').click()">🔴 도장 변경</button>
   <button type="button" class="secondary" onclick="document.getElementById('bgColorInput').click()">🎨 배경색 변경</button>
   <button type="button" onclick="saveEditableFile()">💾 수정가능 파일 저장</button>
+  <button class="secondary" onclick="saveFixedPdf()">📄 고정형 PDF 저장</button>
   <button class="secondary" onclick="window.print()">🖨 인쇄 / PDF 저장</button>
 
   <input id="logoFileInput" type="file" accept="image/*" hidden>
@@ -1307,6 +1370,152 @@ window.addEventListener('beforeprint', adjustNameSpecColumns);
       applyPalette(this.value);
     });
   }
+})();
+</script>
+
+
+<script id="fixed-pdf-export">
+(function(){
+  function loadScriptOnce(src, globalCheck){
+    return new Promise(function(resolve, reject){
+      if(globalCheck()) return resolve();
+      const existing = Array.from(document.scripts).find(s => s.src === src);
+      if(existing){
+        existing.addEventListener('load', resolve, {once:true});
+        existing.addEventListener('error', reject, {once:true});
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  async function ensurePdfLibraries(){
+    await loadScriptOnce(
+      'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+      () => typeof window.html2canvas === 'function'
+    );
+    await loadScriptOnce(
+      'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
+      () => !!(window.jspdf && window.jspdf.jsPDF)
+    );
+  }
+
+  function syncFormState(original, clone){
+    const originalEditables = original.querySelectorAll('[contenteditable="true"]');
+    const cloneEditables = clone.querySelectorAll('[contenteditable="true"]');
+    originalEditables.forEach((el, i) => {
+      if(cloneEditables[i]) cloneEditables[i].innerHTML = el.innerHTML;
+    });
+
+    const originalInputs = original.querySelectorAll('input, textarea, select');
+    const cloneInputs = clone.querySelectorAll('input, textarea, select');
+    originalInputs.forEach((el, i) => {
+      const c = cloneInputs[i];
+      if(!c) return;
+      if(el.type === 'checkbox' || el.type === 'radio') c.checked = el.checked;
+      else c.value = el.value;
+    });
+  }
+
+  function makeFixedClone(){
+    const source = document.querySelector('.sheet');
+    if(!source) throw new Error('견적서 영역을 찾을 수 없습니다.');
+
+    const stage = document.createElement('div');
+    stage.className = 'pdf-capture-stage';
+
+    const clone = source.cloneNode(true);
+    syncFormState(source, clone);
+
+    /* 현재 선택된 색상 CSS 변수도 복제본에 고정 */
+    const cs = getComputedStyle(document.documentElement);
+    ['--quote-strong','--quote-mid','--quote-light'].forEach(function(v){
+      const value = cs.getPropertyValue(v).trim();
+      if(value) clone.style.setProperty(v, value);
+    });
+
+    stage.appendChild(clone);
+    document.body.appendChild(stage);
+    return {stage, clone};
+  }
+
+  async function waitForImages(root){
+    const imgs = Array.from(root.querySelectorAll('img'));
+    await Promise.all(imgs.map(function(img){
+      if(img.complete) return Promise.resolve();
+      return new Promise(function(resolve){
+        img.addEventListener('load', resolve, {once:true});
+        img.addEventListener('error', resolve, {once:true});
+      });
+    }));
+  }
+
+  window.saveFixedPdf = async function(){
+    let stage = null;
+    try{
+      await ensurePdfLibraries();
+
+      if(document.fonts && document.fonts.ready){
+        await document.fonts.ready;
+      }
+
+      const made = makeFixedClone();
+      stage = made.stage;
+      const clone = made.clone;
+
+      await waitForImages(clone);
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      const canvas = await window.html2canvas(clone, {
+        scale: 2.5,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        width: 900,
+        windowWidth: 900,
+        scrollX: 0,
+        scrollY: 0
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation:'portrait',
+        unit:'mm',
+        format:'a4',
+        compress:true
+      });
+
+      const pageW = 210;
+      const pageH = 297;
+      const margin = 10;
+      const usableW = pageW - margin * 2;
+      const imgH = usableW * (canvas.height / canvas.width);
+
+      if(imgH <= pageH - margin * 2){
+        pdf.addImage(imgData, 'JPEG', margin, margin, usableW, imgH, undefined, 'FAST');
+      }else{
+        const usableH = pageH - margin * 2;
+        const scaledW = usableH * (canvas.width / canvas.height);
+        const x = (pageW - scaledW) / 2;
+        pdf.addImage(imgData, 'JPEG', x, margin, scaledW, usableH, undefined, 'FAST');
+      }
+
+      const docno = (document.getElementById('docno')?.textContent || '견적서').trim()
+        .replace(/[\\/:*?"<>|]/g,'-');
+      pdf.save(docno + '_견적서.pdf');
+    }catch(err){
+      console.error(err);
+      alert('고정형 PDF 생성에 실패했습니다. 인터넷 연결 상태를 확인한 뒤 다시 시도해주세요.');
+    }finally{
+      if(stage) stage.remove();
+    }
+  };
 })();
 </script>
 
