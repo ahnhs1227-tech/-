@@ -996,6 +996,28 @@ a[href^="mailto:"]{
 .pdf-capture-stage .supplier-manager{display:none !important;}
 </style>
 
+
+<style id="supplier-controls-layout-fix">
+/*
+  공급자 관리 UI는 header-grid의 flex 계산에 절대 참여하지 않는다.
+  따라서 화면에서 측정한 left/supplier 폭과 PDF의 mm 변환값이 동일하게 유지된다.
+*/
+.supplier-controls{
+  width:100%;
+  box-sizing:border-box;
+}
+@media print{
+  .supplier-controls,
+  .supplier-manager{
+    display:none !important;
+  }
+}
+.pdf-capture-stage .supplier-controls,
+.pdf-capture-stage .supplier-manager{
+  display:none !important;
+}
+</style>
+
 </head>
 <body>
 
@@ -1048,21 +1070,7 @@ a[href^="mailto:"]{
     E: <span contenteditable="true">designmodi@naver.com</span>
   </div>
 
-  <div class="header-grid">
-    <div class="left-block">
-      <div class="date-line">
-        <span contenteditable="true" id="y">2026</span> 년
-        <span contenteditable="true" id="m">01</span> 월
-        <span contenteditable="true" id="d">01</span> 일
-      </div>
-      <div class="recipient">
-        <span contenteditable="true">거래처명</span>
-        <span class="suffix">귀중</span>
-      </div>
-    </div>
-
-    
-<div class="supplier-controls no-print">
+  <div class="supplier-controls no-print">
   <button type="button" class="supplier-manage-btn" onclick="toggleSupplierManager()">⚙ 공급자 관리</button>
   <div class="supplier-favorites" id="supplierFavoriteButtons"></div>
   <button type="button" class="supplier-clear-btn" onclick="clearSupplierInfo()">공급자 정보 삭제</button>
@@ -1080,6 +1088,21 @@ a[href^="mailto:"]{
   <div id="supplierPresetList" class="supplier-preset-list"></div>
 </div>
 
+
+<div class="header-grid">
+    <div class="left-block">
+      <div class="date-line">
+        <span contenteditable="true" id="y">2026</span> 년
+        <span contenteditable="true" id="m">01</span> 월
+        <span contenteditable="true" id="d">01</span> 일
+      </div>
+      <div class="recipient">
+        <span contenteditable="true">거래처명</span>
+        <span class="suffix">귀중</span>
+      </div>
+    </div>
+
+    
 <table class="supplier">
       <tr>
         <td class="side-label" rowspan="5">공&nbsp;급&nbsp;자</td>
@@ -1662,6 +1685,7 @@ window.addEventListener('beforeprint', adjustNameSpecColumns);
         if(img){
           img.src = dataUrl;
           img.style.display = 'block';
+          img.style.visibility = 'visible';
         }
       });
       this.value = '';
@@ -2058,9 +2082,10 @@ window.addEventListener('beforeprint', adjustNameSpecColumns);
       if(data.logoSrc){
         logo.src=data.logoSrc;
         logo.style.display='block';
+        logo.style.visibility='visible';
       }else{
         logo.removeAttribute('src');
-        logo.style.display='none';
+        logo.style.visibility='hidden';
       }
     }
   }
@@ -2247,7 +2272,7 @@ window.deleteCompanyLogo = function(){
   if(!logo) return;
   if(!window.confirm('현재 로고를 삭제할까요?')) return;
   logo.removeAttribute('src');
-  logo.style.display = 'none';
+  logo.style.visibility = 'hidden';
 };
 </script>
 
