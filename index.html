@@ -1043,15 +1043,55 @@ a[href^="mailto:"]{
 let rowCount = 0;
 
 function bindRowEvents(tr){
+  // 수량/단가를 수정하면 '합계 직접입력 모드'를 해제하고 기존 방식으로 계산
   tr.querySelectorAll('[data-role="qty"], [data-role="price"]').forEach(cell=>{
-    cell.addEventListener('input', calcAll);
-    cell.addEventListener('blur', calcAll);
+    cell.addEventListener('input', ()=>{
+      delete tr.dataset.manualTotal;
+      calcAll();
+    });
+    cell.addEventListener('blur', ()=>{
+      delete tr.dataset.manualTotal;
+      calcAll();
+    });
   });
+
   const supplyCell = tr.querySelector('[data-role="supply"]');
   if(supplyCell){
-    // 공급가액은 단가가 없을 때만 직접 수정 가능 (단가가 있으면 자동계산 값으로 덮어씀)
-    supplyCell.addEventListener('input', calcAll);
-    supplyCell.addEventListener('blur', calcAll);
+    // 공급가액을 직접 수정하면 합계 직접입력 모드를 해제
+    supplyCell.addEventListener('input', ()=>{
+      delete tr.dataset.manualTotal;
+      calcAll();
+    });
+    supplyCell.addEventListener('blur', ()=>{
+      delete tr.dataset.manualTotal;
+
+      const price = parseNum(tr.querySelector('[data-role="price"]')?.textContent || '');
+      if(price <= 0){
+        const supply = Math.max(0, Math.round(parseNum(supplyCell.textContent)));
+        supplyCell.textContent = supply ? fmt(supply) : '';
+      }
+
+      calcAll();
+    });
+  }
+
+  const totalCell = tr.querySelector('[data-role="total"]');
+  if(totalCell){
+    // 합계를 먼저 입력하면 VAT 포함금액으로 보고 공급가액/세액을 역산
+    totalCell.addEventListener('input', ()=>{
+      tr.dataset.manualTotal = 'true';
+      reverseCalcRowFromTotal(tr, false);
+    });
+    totalCell.addEventListener('blur', ()=>{
+      tr.dataset.manualTotal = 'true';
+      reverseCalcRowFromTotal(tr, true);
+    });
+    totalCell.addEventListener('keydown', e=>{
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        totalCell.blur();
+      }
+    });
   }
 
   // 품명/규격 입력 길이가 바뀔 때 열 폭을 다시 배분
@@ -1107,7 +1147,7 @@ function makeRow(name="", spec="", unit="", qty="", price=""){
     <td class="num" contenteditable="true" data-role="price">${price}</td>
     <td class="num" contenteditable="true" data-role="supply">0</td>
     <td class="num readonly" data-role="tax">0</td>
-    <td class="num readonly" data-role="total">0</td>
+    <td class="num" contenteditable="true" data-role="total">0</td>
   `;
   bindRowEvents(tr);
   return tr;
@@ -1186,45 +1226,124 @@ function numberToKorean(num){
   return result;
 }
 
+
+// 각 행의 현재 값을 기준으로 하단 합계와 상단 최종 견적금액만 갱신
+function updateSummaryFromRows(){
+  let sumSupply = 0, sumTax = 0, sumTotal = 0;
+
+  document.querySelectorAll('#itemsBody tr').forEach(tr=>{
+    sumSupply += parseNum(tr.querySelector('[data-role="supply"]')?.textContent || 0);
+    sumTax += parseNum(tr.querySelector('[data-role="tax"]')?.textContent || 0);
+    sumTotal += parseNum(tr.querySelector('[data-role="total"]')?.textContent || 0);
+  });
+
+  document.getElementById('sumSupply').textContent = fmt(sumSupply);
+  document.getElementById('sumTax').textContent = fmt(sumTax);
+  document.getElementById('sumTotal').textContent = fmt(sumTotal);
+  setFinalAmount(sumTotal);
+}
+
+// 행의 '합계(VAT 포함)'를 먼저 입력했을 때 공급가액/세액 역산
+function reverseCalcRowFromTotal(tr, formatTotal){
+  const totalCell = tr.querySelector('[data-role="total"]');
+  const supplyCell = tr.querySelector('[data-role="supply"]');
+  const taxCell = tr.querySelector('[data-role="tax"]');
+  if(!totalCell || !supplyCell || !taxCell) return;
+
+  const raw = totalCell.textContent.trim();
+  if(raw === ''){
+    supplyCell.textContent = '';
+    taxCell.textContent = '';
+    updateSummaryFromRows();
+    return;
+  }
+
+  const total = Math.max(0, Math.round(parseNum(raw)));
+
+  // VAT 10% 포함금액 역산.
+  // 세액을 차액으로 계산해 공급가액 + 세액 = 입력 합계가 정확히 맞도록 함.
+  const supply = Math.round(total / 1.1);
+  const tax = total - supply;
+
+  supplyCell.classList.remove('readonly');
+  supplyCell.contentEditable = 'true';
+  supplyCell.textContent = fmt(supply);
+  taxCell.textContent = fmt(tax);
+
+  if(formatTotal){
+    totalCell.textContent = fmt(total);
+  }
+
+  updateSummaryFromRows();
+}
+
+/*
+  행별 금액 계산 우선순위
+  1) 단가 > 0 : 수량 × 단가 = 공급가액 → 세액(10%) → 합계
+  2) 단가가 빈칸 또는 0 : 공급가액 직접 입력 → 세액(10%) → 합계
+  3) 합계 직접 입력 : 합계 ÷ 1.1로 공급가액 역산 → 세액은 차액
+*/
 function calcAll(){
   let sumSupply = 0, sumTax = 0, sumTotal = 0;
+
   document.querySelectorAll('#itemsBody tr').forEach(tr=>{
     const qtyCell = tr.querySelector('[data-role="qty"]');
     const priceCell = tr.querySelector('[data-role="price"]');
     const supplyCell = tr.querySelector('[data-role="supply"]');
+    const taxCell = tr.querySelector('[data-role="tax"]');
+    const totalCell = tr.querySelector('[data-role="total"]');
 
-    const qty = parseNum(qtyCell.textContent);
-    const priceRaw = priceCell.textContent.trim();
-    const hasPrice = priceRaw !== '';
-    const price = parseNum(priceRaw);
+    let supply = 0, tax = 0, total = 0;
 
-    let supply;
-    if (hasPrice) {
-      // 단가가 있으면 수량 x 단가로 자동계산 (수동 입력값을 덮어씀)
-      supply = qty * price;
-      supplyCell.classList.add('readonly');
-      supplyCell.contentEditable = 'false';
-      supplyCell.textContent = supply ? fmt(supply) : (qty ? '0' : '');
-    } else {
-      // 단가가 없으면 공급가액을 직접 입력한 값을 그대로 사용
+    // 합계를 직접 입력한 행은 그 금액을 우선하여 역산
+    if(tr.dataset.manualTotal === 'true'){
+      total = Math.max(0, Math.round(parseNum(totalCell.textContent)));
+      supply = Math.round(total / 1.1);
+      tax = total - supply;
+
       supplyCell.classList.remove('readonly');
       supplyCell.contentEditable = 'true';
-      supply = parseNum(supplyCell.textContent);
+      supplyCell.textContent = total ? fmt(supply) : '';
+      taxCell.textContent = total ? fmt(tax) : '';
+      // 사용자가 입력 중일 수 있으므로 totalCell은 여기서 다시 포맷하지 않음
+    }else{
+      const qty = parseNum(qtyCell.textContent);
+      const priceRaw = priceCell.textContent.trim();
+      const price = parseNum(priceRaw);
+
+      // 단가가 실제로 0보다 클 때만 '단가기준 자동계산'으로 처리.
+      // 빈칸 또는 0이면 공급가액을 직접 입력할 수 있다.
+      const hasPrice = priceRaw !== '' && price > 0;
+
+      if(hasPrice){
+        // 기존 방식: 단가가 있으면 수량 × 단가
+        supply = qty * price;
+        supplyCell.classList.add('readonly');
+        supplyCell.contentEditable = 'false';
+        supplyCell.textContent = supply ? fmt(supply) : (qty ? '0' : '');
+      }else{
+        // 단가가 없으면 공급가액 직접 입력 가능
+        supplyCell.classList.remove('readonly');
+        supplyCell.contentEditable = 'true';
+        supply = parseNum(supplyCell.textContent);
+      }
+
+      tax = Math.round(supply * 0.1);
+      total = supply + tax;
+      taxCell.textContent = supply ? fmt(tax) : '';
+      totalCell.textContent = supply ? fmt(total) : '';
     }
 
-    const tax = Math.round(supply * 0.1);
-    const total = supply + tax;
-    tr.querySelector('[data-role="tax"]').textContent = supply ? fmt(tax) : '';
-    tr.querySelector('[data-role="total"]').textContent = supply ? fmt(total) : '';
     sumSupply += supply;
     sumTax += tax;
     sumTotal += total;
   });
+
   document.getElementById('sumSupply').textContent = fmt(sumSupply);
   document.getElementById('sumTax').textContent = fmt(sumTax);
   document.getElementById('sumTotal').textContent = fmt(sumTotal);
 
-  // 품목이 변경되면 최종 견적금액은 계산값으로 다시 맞춤
+  // 품목 합계에 맞춰 상단 최종 견적금액도 갱신
   setFinalAmount(sumTotal);
 }
 
