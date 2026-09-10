@@ -524,6 +524,23 @@ table.items tfoot td:nth-last-child(3){
   cursor:pointer;
   pointer-events:auto;
 }
+.row-move-btn{
+  position:absolute;
+  width:24px;
+  height:24px;
+  transform:translateY(-50%);
+  padding:0;
+  border:1px solid #a8a8a8;
+  border-radius:4px;
+  background:#fff;
+  color:var(--accent);
+  font:14px sans-serif;
+  cursor:pointer;
+  pointer-events:auto;
+  touch-action:manipulation;
+}
+.row-move-btn:disabled{opacity:.3;cursor:default;}
+.row-move-btn:hover:not(:disabled){background:#eef1f4;}
 .row-delete-btn:hover{
   background:#fff3f1;
 }
@@ -1817,49 +1834,88 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
     const tb = table.tBodies && table.tBodies[0];
     return tb ? Array.from(tb.rows) : [];
   }
+  // 순서만 변경하므로 계산값/입력 이벤트/행별 세액 보관값을 그대로 유지한다.
+  window.moveItemRow = function(tr, direction){
+    const body = document.getElementById('itemsBody');
+    if(!tr || tr.parentElement !== body) return;
+    const neighbor = direction < 0 ? tr.previousElementSibling : tr.nextElementSibling;
+    if(!neighbor) return;
+    if(direction < 0) body.insertBefore(tr, neighbor);
+    else body.insertBefore(neighbor, tr);
+    renumber();
+    scheduleRowControls();
+  };
+
+  let controlsFrame = 0;
+  function scheduleRowControls(){
+    if(controlsFrame) return;
+    controlsFrame = requestAnimationFrame(()=>{
+      controlsFrame = 0;
+      window.refreshDeleteOverlay();
+    });
+  }
+
   window.refreshDeleteOverlay = function(){
     const table = getItemsTable();
     const overlay = document.getElementById('rowDeleteOverlay');
     if(!table || !overlay) return;
-    overlay.innerHTML = '';
-    const tableRect = table.getBoundingClientRect();
-    getBodyRows().forEach((tr)=>{
+    const rows = getBodyRows();
+    // 위치를 한 번에 읽은 뒤 버튼을 교체해 반복적인 레이아웃 계산을 피한다.
+    const tableTop = table.getBoundingClientRect().top;
+    const positions = rows.map(tr=>{
       const rect = tr.getBoundingClientRect();
+      return rect.top - tableTop + rect.height/2;
+    });
+    const fragment = document.createDocumentFragment();
+    rows.forEach((tr,index)=>{
+      for(const direction of [-1,1]){
+        const move = document.createElement('button');
+        move.type = 'button';
+        move.className = 'row-move-btn';
+        move.textContent = direction < 0 ? '↑' : '↓';
+        move.style.left = direction < 0 ? '0' : '26px';
+        move.style.top = positions[index] + 'px';
+        move.disabled = direction < 0 ? index === 0 : index === rows.length-1;
+        move.setAttribute('aria-label', (index+1)+'번 품목 '+(direction<0?'위로 이동':'아래로 이동'));
+        move.title = direction < 0 ? '위로 이동' : '아래로 이동';
+        move.addEventListener('click', ()=>window.moveItemRow(tr,direction));
+        fragment.appendChild(move);
+      }
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'row-delete-btn';
       btn.textContent = '삭제';
-      btn.style.top = ((rect.top - tableRect.top) + rect.height/2) + 'px';
+      btn.style.left = '52px';
+      btn.style.top = positions[index] + 'px';
       btn.addEventListener('click', function(){
-        const nameCell = tr.querySelector('td.name');
-        const itemName = nameCell ? nameCell.textContent.trim() : '';
+        const itemName = tr.querySelector('td.name')?.textContent.trim() || '';
         const msg = itemName ? `“${itemName}” 품목을 삭제하시겠습니까?` : '이 품목을 삭제하시겠습니까?';
         if(confirm(msg)){
           tr.remove();
-          if(typeof window.recalc === 'function') window.recalc();
-          if(typeof window.recalcAll === 'function') window.recalcAll();
-          if(typeof window.renumber === 'function') window.renumber();
-          requestAnimationFrame(window.refreshDeleteOverlay);
+          renumber();
+          calcAll();
+          adjustNameSpecColumns();
+          scheduleRowControls();
         }
       });
-      overlay.appendChild(btn);
+      fragment.appendChild(btn);
     });
+    overlay.replaceChildren(fragment);
   };
 
   document.addEventListener('DOMContentLoaded', function(){
-    requestAnimationFrame(window.refreshDeleteOverlay);
-    setTimeout(window.refreshDeleteOverlay, 150);
-  });
-  window.addEventListener('resize', window.refreshDeleteOverlay);
-
-  // observe row changes
-  document.addEventListener('DOMContentLoaded', function(){
+    scheduleRowControls();
     const table = getItemsTable();
     if(table && window.MutationObserver){
-      const obs = new MutationObserver(()=>requestAnimationFrame(window.refreshDeleteOverlay));
-      obs.observe(table, {childList:true, subtree:true});
+      new MutationObserver(scheduleRowControls).observe(table,
+        {childList:true, subtree:true, characterData:true});
     }
+    if(table && window.ResizeObserver){
+      new ResizeObserver(scheduleRowControls).observe(table);
+    }
+    if(document.fonts) document.fonts.ready.then(scheduleRowControls);
   });
+  window.addEventListener('resize', scheduleRowControls);
 })();
 </script>
 
