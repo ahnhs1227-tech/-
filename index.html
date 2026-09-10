@@ -1027,6 +1027,13 @@ a[href^="mailto:"]{
       <option value="statement">거래명세서</option>
     </select>
   </label>
+  <label class="document-type-control" style="margin-right:0">
+    <span>세액</span>
+    <select id="vatModeSelect" onchange="changeVatMode(this.value)" aria-label="세액 계산 방식">
+      <option value="included" selected>세액 포함</option>
+      <option value="separate">세액 별도</option>
+    </select>
+  </label>
   <button type="button" onclick="qv_saveCurrentEstimate()">💾 현재 견적 저장</button>
   <button type="button" class="secondary" onclick="qv_openEstimateVault()">📁 저장된 견적</button>
   <button type="button" class="secondary" onclick="document.getElementById('logoFileInput').click()">🖼 로고 변경</button>
@@ -1147,7 +1154,7 @@ a[href^="mailto:"]{
   <div class="lead-text" id="documentLeadText">아래와 같이 견적 합니다.</div>
 
   <div class="amount-bar">
-    <div class="amount-label"><span id="documentAmountLabel">견적금액</span><br><span style="font-weight:400;font-size:11px;">(VAT포함)</span></div>
+    <div class="amount-label"><span id="documentAmountLabel">견적금액</span><br><span id="vatModeLabel" style="font-weight:400;font-size:11px;">(VAT포함)</span></div>
     <div class="amount-value" id="amountText">
       일금 <span id="amountKorean">영</span>원정(₩<span id="finalAmount" contenteditable="true">0</span>)
       <span class="rounding-buttons" aria-label="최종금액 절삭">
@@ -1226,6 +1233,47 @@ const DOCUMENT_TYPES = {
   }
 };
 
+function isVatSeparate(){
+  return document.documentElement.getAttribute('data-vat-mode') === 'separate';
+}
+
+function updateDocumentFooter(){
+  const type = document.documentElement.getAttribute('data-document-type');
+  const labels = DOCUMENT_TYPES[type] || DOCUMENT_TYPES.estimate;
+  document.getElementById('documentFooter').textContent = isVatSeparate()
+    ? labels.footer.replace('부가세(10%) 포함', '부가세(10%) 별도')
+    : labels.footer;
+}
+
+function syncVatMode(mode){
+  const separate = mode === 'separate';
+  document.documentElement.setAttribute('data-vat-mode', separate ? 'separate' : 'included');
+  const select = document.getElementById('vatModeSelect');
+  select.value = separate ? 'separate' : 'included';
+  Array.from(select.options).forEach(option=>{
+    option.selected = option.value === select.value;
+    if(option.selected) option.setAttribute('selected', '');
+    else option.removeAttribute('selected');
+  });
+  document.getElementById('vatModeLabel').textContent = separate ? '(VAT별도)' : '(VAT포함)';
+  updateDocumentFooter();
+}
+
+function changeVatMode(mode){
+  if((mode === 'separate') === isVatSeparate()) return;
+  // 합계 직접입력 행도 공급가액/세액을 유지한 채 합산 여부만 변경한다.
+  document.querySelectorAll('#itemsBody tr').forEach(tr=>{
+    if(tr.dataset.manualTotal !== 'true') return;
+    const supply = parseNum(tr.querySelector('[data-role="supply"]').textContent);
+    const tax = manualAmounts(tr, Math.max(0, Math.round(parseNum(
+      tr.querySelector('[data-role="total"]').textContent)))).tax;
+    tr.querySelector('[data-role="total"]').textContent = fmt(mode === 'separate' ? supply : supply + tax);
+  });
+  syncVatMode(mode);
+  calcAll();
+  adjustNameSpecColumns();
+}
+
 function changeDocumentType(type){
   const normalizedType = DOCUMENT_TYPES[type] ? type : 'estimate';
   const labels = DOCUMENT_TYPES[normalizedType];
@@ -1236,7 +1284,7 @@ function changeDocumentType(type){
   document.getElementById('documentTitle').textContent = labels.title;
   document.getElementById('documentLeadText').textContent = labels.lead;
   document.getElementById('documentAmountLabel').textContent = labels.amountLabel;
-  document.getElementById('documentFooter').textContent = labels.footer;
+  updateDocumentFooter();
   labels.terms.forEach((label, index) => {
     document.getElementById(`termLabel${index + 1}`).textContent = label;
   });
@@ -1259,6 +1307,7 @@ function getDocumentTypeName(){
 
 document.addEventListener('DOMContentLoaded', function(){
   changeDocumentType(document.documentElement.getAttribute('data-document-type') || 'estimate');
+  syncVatMode(document.documentElement.getAttribute('data-vat-mode'));
 });
 
 // 소수점과 입력 중인 부호는 유지하고 정수 부분에만 천 단위 쉼표를 붙인다.
@@ -1316,10 +1365,14 @@ function bindRowEvents(tr){
   tr.querySelectorAll('[data-role="qty"], [data-role="price"]').forEach(cell=>{
     cell.addEventListener('input', ()=>{
       delete tr.dataset.manualTotal;
+      delete tr.dataset.manualSupply;
+      delete tr.dataset.manualTax;
       calcAll();
     });
     cell.addEventListener('blur', ()=>{
       delete tr.dataset.manualTotal;
+      delete tr.dataset.manualSupply;
+      delete tr.dataset.manualTax;
       calcAll();
     });
   });
@@ -1329,10 +1382,14 @@ function bindRowEvents(tr){
     // 공급가액을 직접 수정하면 합계 직접입력 모드를 해제
     supplyCell.addEventListener('input', ()=>{
       delete tr.dataset.manualTotal;
+      delete tr.dataset.manualSupply;
+      delete tr.dataset.manualTax;
       calcAll();
     });
     supplyCell.addEventListener('blur', ()=>{
       delete tr.dataset.manualTotal;
+      delete tr.dataset.manualSupply;
+      delete tr.dataset.manualTax;
 
       const price = parseNum(tr.querySelector('[data-role="price"]')?.textContent || '');
       if(price <= 0){
@@ -1349,6 +1406,8 @@ function bindRowEvents(tr){
     // 합계를 먼저 입력하면 VAT 포함금액으로 보고 공급가액/세액을 역산
     totalCell.addEventListener('input', ()=>{
       tr.dataset.manualTotal = 'true';
+      delete tr.dataset.manualSupply;
+      delete tr.dataset.manualTax;
       reverseCalcRowFromTotal(tr, false);
     });
     totalCell.addEventListener('blur', ()=>{
@@ -1517,9 +1576,24 @@ function updateSummaryFromRows(){
   });
 
   document.getElementById('sumSupply').textContent = fmt(sumSupply);
-  document.getElementById('sumTax').textContent = fmt(sumTax);
+  document.getElementById('sumTax').textContent = isVatSeparate() ? '' : fmt(sumTax);
   document.getElementById('sumTotal').textContent = fmt(sumTotal);
   setFinalAmount(sumTotal);
+}
+
+// 모드 전환으로 세액을 다시 반올림하지 않도록 원래의 공급가액/세액 쌍을 보존한다.
+function manualAmounts(tr, total){
+  const savedSupply = Number(tr.dataset.manualSupply);
+  const savedTax = Number(tr.dataset.manualTax);
+  const expected = isVatSeparate() ? savedSupply : savedSupply + savedTax;
+  if(Number.isFinite(savedSupply) && Number.isFinite(savedTax) && expected === total){
+    return {supply:savedSupply, tax:savedTax};
+  }
+  const supply = isVatSeparate() ? total : Math.round(total / 1.1);
+  const tax = isVatSeparate() ? Math.round(supply * 0.1) : total - supply;
+  tr.dataset.manualSupply = String(supply);
+  tr.dataset.manualTax = String(tax);
+  return {supply, tax};
 }
 
 // 행의 '합계(VAT 포함)'를 먼저 입력했을 때 공급가액/세액 역산
@@ -1531,6 +1605,8 @@ function reverseCalcRowFromTotal(tr, formatTotal){
 
   const raw = totalCell.textContent.trim();
   if(raw === ''){
+    delete tr.dataset.manualSupply;
+    delete tr.dataset.manualTax;
     supplyCell.textContent = '';
     taxCell.textContent = '';
     updateSummaryFromRows();
@@ -1541,13 +1617,12 @@ function reverseCalcRowFromTotal(tr, formatTotal){
 
   // VAT 10% 포함금액 역산.
   // 세액을 차액으로 계산해 공급가액 + 세액 = 입력 합계가 정확히 맞도록 함.
-  const supply = Math.round(total / 1.1);
-  const tax = total - supply;
+  const {supply, tax} = manualAmounts(tr, total);
 
   supplyCell.classList.remove('readonly');
   supplyCell.contentEditable = 'true';
   supplyCell.textContent = fmt(supply);
-  taxCell.textContent = fmt(tax);
+  taxCell.textContent = isVatSeparate() ? '' : fmt(tax);
 
   if(formatTotal){
     totalCell.textContent = fmt(total);
@@ -1577,13 +1652,12 @@ function calcAll(){
     // 합계를 직접 입력한 행은 그 금액을 우선하여 역산
     if(tr.dataset.manualTotal === 'true'){
       total = Math.max(0, Math.round(parseNum(totalCell.textContent)));
-      supply = Math.round(total / 1.1);
-      tax = total - supply;
+      ({supply, tax} = manualAmounts(tr, total));
 
       supplyCell.classList.remove('readonly');
       supplyCell.contentEditable = 'true';
       supplyCell.textContent = total ? fmt(supply) : '';
-      taxCell.textContent = total ? fmt(tax) : '';
+      taxCell.textContent = !isVatSeparate() && total ? fmt(tax) : '';
       // 사용자가 입력 중일 수 있으므로 totalCell은 여기서 다시 포맷하지 않음
     }else{
       const qty = parseNum(qtyCell.textContent);
@@ -1608,8 +1682,8 @@ function calcAll(){
       }
 
       tax = Math.round(supply * 0.1);
-      total = supply + tax;
-      taxCell.textContent = supply ? fmt(tax) : '';
+      total = isVatSeparate() ? supply : supply + tax;
+      taxCell.textContent = !isVatSeparate() && supply ? fmt(tax) : '';
       totalCell.textContent = supply ? fmt(total) : '';
     }
 
@@ -1619,7 +1693,7 @@ function calcAll(){
   });
 
   document.getElementById('sumSupply').textContent = fmt(sumSupply);
-  document.getElementById('sumTax').textContent = fmt(sumTax);
+  document.getElementById('sumTax').textContent = isVatSeparate() ? '' : fmt(sumTax);
   document.getElementById('sumTotal').textContent = fmt(sumTotal);
 
   // 품목 합계에 맞춰 상단 최종 견적금액도 갱신
@@ -2453,15 +2527,16 @@ window.deleteCompanyLogo = function(){
     if(document.activeElement?.blur)document.activeElement.blur();
     const sheet=$('.sheet');
     const editable=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody')).map(el=>el.innerHTML);
-    const rows=all('#itemsBody tr').map(tr=>({manual:tr.dataset.manualTotal==='true',cells:Array.from(tr.cells).map(td=>td.innerHTML)}));
+    const rows=all('#itemsBody tr').map(tr=>({manual:tr.dataset.manualTotal==='true',manualSupply:tr.dataset.manualSupply,manualTax:tr.dataset.manualTax,cells:Array.from(tr.cells).map(td=>td.innerHTML)}));
     const rootStyle=document.documentElement.getAttribute('style')||'';
-    return {schema:1,documentType:$('#documentTypeSelect')?.value||'estimate',editable,rows,rootStyle,bodyStyle:document.body.getAttribute('style')||'',sheetStyle:sheet?.getAttribute('style')||'',logo:{src:$('.logo img')?.getAttribute('src')||'',style:$('.logo img')?.getAttribute('style')||''},stamp:{src:$('.stamp-img')?.getAttribute('src')||'',style:$('.stamp-img')?.getAttribute('style')||''},sheetClass:sheet?.className||'sheet'};
+    return {schema:1,vatMode:isVatSeparate()?'separate':'included',documentType:$('#documentTypeSelect')?.value||'estimate',editable,rows,rootStyle,bodyStyle:document.body.getAttribute('style')||'',sheetStyle:sheet?.getAttribute('style')||'',logo:{src:$('.logo img')?.getAttribute('src')||'',style:$('.logo img')?.getAttribute('style')||''},stamp:{src:$('.stamp-img')?.getAttribute('src')||'',style:$('.stamp-img')?.getAttribute('style')||''},sheetClass:sheet?.className||'sheet'};
   }
   function qv_meta(){return {recipient:qv_text($('.recipient span[contenteditable]')),date:[qv_text($('#y')),qv_text($('#m')),qv_text($('#d'))].join('-'),docno:qv_text($('#docno')),total:qv_text($('#finalAmount')),documentType:$('#documentTypeSelect')?.value||'estimate'};}
   function qv_restoreState(state){
     if(!state||state.schema!==1)throw new Error('지원하지 않는 백업 형식입니다.');
+    syncVatMode(state.vatMode || 'included');
     const body=$('#itemsBody'); body.innerHTML=''; window.rowCount=0;
-    (state.rows||[]).forEach(row=>{const tr=makeRow();row.cells.forEach((html,i)=>{if(tr.cells[i])tr.cells[i].innerHTML=html;});if(row.manual)tr.dataset.manualTotal='true';body.appendChild(tr);});
+    (state.rows||[]).forEach(row=>{const tr=makeRow();row.cells.forEach((html,i)=>{if(tr.cells[i])tr.cells[i].innerHTML=html;});if(row.manual){tr.dataset.manualTotal='true';if(row.manualSupply != null && row.manualTax != null){tr.dataset.manualSupply=String(row.manualSupply);tr.dataset.manualTax=String(row.manualTax);}}body.appendChild(tr);});
     if($('#documentTypeSelect')&&typeof window.changeDocumentType==='function'){changeDocumentType(state.documentType||'estimate');$('#documentTypeSelect').value=state.documentType||'estimate';}
     const editables=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody'));
     (state.editable||[]).forEach((html,i)=>{if(editables[i])editables[i].innerHTML=html;});
