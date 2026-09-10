@@ -255,10 +255,10 @@
   table.items th:nth-child(2), table.items td:nth-child(2){ width:auto; min-width:190px; }
   table.items th:nth-child(3), table.items td:nth-child(3){ width:var(--spec-col-width, 76px) !important; }
   table.items th:nth-child(4), table.items td:nth-child(4){ width:42px !important; }
-  table.items th:nth-child(5), table.items td:nth-child(5){ width:46px !important; }
-  table.items th:nth-child(6), table.items td:nth-child(6){ width:72px !important; }
+  table.items th:nth-child(5), table.items td:nth-child(5){ width:var(--qty-col-width, 46px) !important; }
+  table.items th:nth-child(6), table.items td:nth-child(6){ width:var(--price-col-width, 72px) !important; }
   table.items th:nth-child(7), table.items td:nth-child(7){ width:82px !important; }
-  table.items th:nth-child(8), table.items td:nth-child(8){ width:68px !important; }
+  table.items th:nth-child(8), table.items td:nth-child(8){ width:82px !important; }
   table.items th:nth-child(9), table.items td:nth-child(9){ width:82px !important; }
   table.items th{
     border:1px solid var(--line);
@@ -276,6 +276,12 @@
   table.items td[contenteditable]:focus{ background:#fffde7; }
   table.items td.name{ text-align:left; overflow-wrap:anywhere; }
   table.items td.spec{ white-space:normal; overflow-wrap:anywhere; }
+  /* 직접 입력/자동 계산 모두 셀 내부에서 동일하게 줄바꿈한다. */
+  table.items td.num, table.items tfoot td{
+    white-space:normal;
+    overflow-wrap:anywhere;
+    word-break:normal;
+  }
   table.items td.readonly{ background:#fbfbfb; color:#333; }
   table.items tfoot td{
     font-weight:800;
@@ -1255,7 +1261,57 @@ document.addEventListener('DOMContentLoaded', function(){
   changeDocumentType(document.documentElement.getAttribute('data-document-type') || 'estimate');
 });
 
+// 소수점과 입력 중인 부호는 유지하고 정수 부분에만 천 단위 쉼표를 붙인다.
+function formatPriceText(text){
+  const raw = String(text).replace(/,/g, '');
+  if(!/^-?\d*(?:\.\d*)?$/.test(raw)) return text;
+  const parts = raw.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
+}
+
+function formatPriceCell(cell){
+  const original = cell.textContent;
+  const formatted = formatPriceText(original);
+  if(formatted === original) return;
+  const selection = window.getSelection();
+  let logicalOffset = null;
+  if(selection && selection.rangeCount && selection.isCollapsed &&
+      cell.contains(selection.anchorNode)){
+    const before = selection.getRangeAt(0).cloneRange();
+    before.selectNodeContents(cell);
+    before.setEnd(selection.anchorNode, selection.anchorOffset);
+    logicalOffset = before.toString().replace(/,/g, '').length;
+  }
+  cell.textContent = formatted;
+  if(logicalOffset !== null && cell.firstChild){
+    let offset = 0, count = 0;
+    while(offset < formatted.length && count < logicalOffset){
+      if(formatted[offset] !== ',') count++;
+      offset++;
+    }
+    const range = document.createRange();
+    range.setStart(cell.firstChild, offset);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+}
+
 function bindRowEvents(tr){
+  const priceInput = tr.querySelector('[data-role="price"]');
+  if(priceInput){
+    formatPriceCell(priceInput);
+    priceInput.addEventListener('input', event=>{
+      if(!event.isComposing) formatPriceCell(priceInput);
+    });
+    priceInput.addEventListener('compositionend', ()=>{
+      formatPriceCell(priceInput);
+      calcAll();
+      adjustNameSpecColumns();
+    });
+    priceInput.addEventListener('blur', ()=>formatPriceCell(priceInput));
+  }
   // 수량/단가를 수정하면 '합계 직접입력 모드'를 해제하고 기존 방식으로 계산
   tr.querySelectorAll('[data-role="qty"], [data-role="price"]').forEach(cell=>{
     cell.addEventListener('input', ()=>{
@@ -1310,7 +1366,8 @@ function bindRowEvents(tr){
   // 품명/규격 입력 길이가 바뀔 때 열 폭을 다시 배분
   const nameCell = tr.querySelector('.name');
   const specCell = tr.querySelector('.spec') || tr.children[2];
-  [nameCell, specCell].forEach(cell=>{
+  [nameCell, specCell, tr.querySelector('[data-role="qty"]'),
+    tr.querySelector('[data-role="price"]')].forEach(cell=>{
     if(!cell) return;
     cell.addEventListener('input', adjustNameSpecColumns);
     cell.addEventListener('blur', adjustNameSpecColumns);
@@ -1323,29 +1380,38 @@ function adjustNameSpecColumns(){
   const table = document.querySelector('table.items');
   if(!table) return;
 
-  const specs = Array.from(document.querySelectorAll('#itemsBody tr')).map(tr => {
-    const cell = tr.querySelector('.spec') || tr.children[2];
-    return (cell?.textContent || '').trim();
-  });
-
   const probe = document.createElement('span');
-  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font:12.5px "Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;';
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;';
   document.body.appendChild(probe);
-
-  let required = 65;
-  for(const text of specs){
-    probe.textContent = text || '규격';
-    required = Math.max(required, Math.ceil(probe.getBoundingClientRect().width) + 18);
+  function measure(selector, minimum, extra){
+    let required = minimum;
+    table.querySelectorAll(selector).forEach(cell=>{
+      const style = getComputedStyle(cell);
+      probe.style.font = style.font;
+      probe.style.letterSpacing = style.letterSpacing;
+      for(const line of cell.innerText.split(/\r?\n/)){
+        probe.textContent = line;
+        required = Math.max(required, Math.ceil(probe.getBoundingClientRect().width) + extra);
+      }
+    });
+    return required;
   }
-  probe.remove();
-
-  // 지나치게 긴 규격 때문에 품명 칸이 희생되지 않도록 상한을 둔다.
-  // 일반적인 규격은 한 줄로 충분히 늘어나고, 아주 긴 경우에만 규격이 줄바꿈된다.
-  const tableWidth = table.getBoundingClientRect().width || 800;
+  // 인쇄 축소 배율의 영향을 받지 않는 레이아웃 폭을 사용한다.
+  const tableWidth = table.offsetWidth || 810;
   const maxSpec = Math.max(90, Math.min(155, Math.floor(tableWidth * 0.20)));
-  const specWidth = Math.max(65, Math.min(required, maxSpec));
-
-  table.style.setProperty('--spec-col-width', specWidth + 'px');
+  const base = [65, 46, 72];
+  const wanted = [Math.min(measure('tbody .spec', 65, 18), maxSpec),
+    measure('[data-role="qty"]', 46, 15), measure('[data-role="price"]', 72, 15)];
+  probe.remove();
+  // 고정 열과 품명 최소 100px를 남긴 범위에서만 확장한다.
+  const budget = Math.max(0, tableWidth - (34 + 42 + 82 + 82 + 82) - 100 - 1
+    - base.reduce((a,b)=>a+b, 0));
+  const extra = wanted.map((width,i)=>width-base[i]);
+  const totalExtra = extra.reduce((a,b)=>a+b, 0);
+  const ratio = totalExtra ? Math.min(1, budget / totalExtra) : 1;
+  ['spec','qty','price'].forEach((role,i)=>{
+    table.style.setProperty('--'+role+'-col-width', (base[i]+extra[i]*ratio)+'px');
+  });
 }
 
 function makeRow(name="", spec="", unit="", qty="", price=""){
@@ -1627,6 +1693,9 @@ function saveEditableFile(){
 
 
 window.addEventListener('resize', adjustNameSpecColumns);
+window.addEventListener('beforeprint', adjustNameSpecColumns);
+window.addEventListener('afterprint', adjustNameSpecColumns);
+if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
 
 
 // 새 템플릿인지, 이전에 저장한 견적서를 다시 연 것인지 구분
