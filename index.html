@@ -1033,6 +1033,20 @@ a[href^="mailto:"]{
 }
 </style>
 
+<style id="balance-section-style">
+/* 잔금 / 잔금 포함 합계 영역 (기본 숨김, 모드 선택 시 표시) */
+#balanceSection{ display:none; justify-content:flex-end; margin-top:14px; }
+html[data-balance-mode="merge"] #balanceSection,
+html[data-balance-mode="separate"] #balanceSection{ display:flex; }
+table.balance{ border-collapse:collapse; width:340px; font-size:12.5px; }
+table.balance td{ border:1px solid var(--line); padding:6px 10px; height:30px; background:#fff; }
+table.balance td.label{ background:var(--quote-light); font-weight:700; text-align:center; width:130px; }
+table.balance td.value{ text-align:right; }
+table.balance tr.total td{ background:var(--quote-mid); font-weight:800; }
+table.balance td[contenteditable]{ outline:none; }
+table.balance td[contenteditable]:focus{ background:#fffde7; }
+@media print{ table.balance td{ border-color:var(--line) !important; } }
+</style>
 </head>
 <body>
 
@@ -1049,6 +1063,14 @@ a[href^="mailto:"]{
     <select id="vatModeSelect" onchange="changeVatMode(this.value)" aria-label="세액 계산 방식">
       <option value="included" selected>세액 포함</option>
       <option value="separate">세액 별도</option>
+    </select>
+  </label>
+  <label class="document-type-control" style="margin-right:0">
+    <span>잔금</span>
+    <select id="balanceModeSelect" onchange="changeBalanceMode(this.value)" aria-label="잔금 표시 방식">
+      <option value="off" selected>잔금 없음</option>
+      <option value="merge">잔금 합산 (상단 금액에 포함)</option>
+      <option value="separate">잔금 별도표기 (상단은 당거래액만)</option>
     </select>
   </label>
   <button type="button" onclick="qv_saveCurrentEstimate()">💾 현재 견적 저장</button>
@@ -1213,6 +1235,14 @@ a[href^="mailto:"]{
 
   <div class="add-row-wrap">
     <button onclick="addRow()">+ 품목 추가</button>
+  </div>
+
+  <div id="balanceSection">
+    <table class="balance">
+      <tr><td class="label">당거래액</td><td class="value" id="balanceTrade">0</td></tr>
+      <tr><td class="label">잔금</td><td class="value" id="balanceAmount" contenteditable="true">0</td></tr>
+      <tr class="total"><td class="label" id="balanceTotalLabel">잔금 포함 합계</td><td class="value" id="balanceTotal">0</td></tr>
+    </table>
   </div>
 
   <div class="foot-grid">
@@ -1595,7 +1625,7 @@ function updateSummaryFromRows(){
   document.getElementById('sumSupply').textContent = fmt(sumSupply);
   document.getElementById('sumTax').textContent = isVatSeparate() ? '' : fmt(sumTax);
   document.getElementById('sumTotal').textContent = fmt(sumTotal);
-  setFinalAmount(sumTotal);
+  setFinalAmount(sumTotal + getMergedBalance());
 }
 
 // 모드 전환으로 세액을 다시 반올림하지 않도록 원래의 공급가액/세액 쌍을 보존한다.
@@ -1713,8 +1743,8 @@ function calcAll(){
   document.getElementById('sumTax').textContent = isVatSeparate() ? '' : fmt(sumTax);
   document.getElementById('sumTotal').textContent = fmt(sumTotal);
 
-  // 품목 합계에 맞춰 상단 최종 견적금액도 갱신
-  setFinalAmount(sumTotal);
+  // 품목 합계에 맞춰 상단 최종 견적금액도 갱신 (잔금 합산 모드면 잔금 포함)
+  setFinalAmount(sumTotal + getMergedBalance());
 }
 
 
@@ -1722,12 +1752,14 @@ function setFinalAmount(value){
   const amount = Math.round(parseNum(value));
   document.getElementById('finalAmount').textContent = fmt(amount);
   document.getElementById('amountKorean').textContent = numberToKorean(amount);
+  updateBalanceSection();
 }
 
 function updateFinalAmountFromEdit(){
   const cell = document.getElementById('finalAmount');
   const amount = Math.round(parseNum(cell.textContent));
   document.getElementById('amountKorean').textContent = numberToKorean(amount);
+  updateBalanceSection();
 }
 
 // 최종 견적금액을 지정 단위로 내림 절삭하고 한글 금액도 함께 갱신
@@ -1745,12 +1777,76 @@ finalAmountCell.addEventListener('blur', function(){
   const amount = Math.round(parseNum(this.textContent));
   this.textContent = fmt(amount);
   document.getElementById('amountKorean').textContent = numberToKorean(amount);
+  updateBalanceSection();
 });
 finalAmountCell.addEventListener('keydown', function(e){
   if(e.key === 'Enter'){
     e.preventDefault();
     this.blur();
   }
+});
+
+
+// ===== 잔금 기능 =====
+// off: 잔금 없음 / merge: 상단 최종금액에 잔금 합산 / separate: 상단은 당거래액만, 하단에 잔금과 잔금 포함 잔액 표기
+function getBalanceMode(){
+  const m = document.documentElement.getAttribute('data-balance-mode');
+  return (m === 'merge' || m === 'separate') ? m : 'off';
+}
+
+function getBalanceAmount(){
+  const cell = document.getElementById('balanceAmount');
+  return cell ? Math.round(parseNum(cell.textContent)) : 0;
+}
+
+// 잔금 합산 모드에서만 상단 최종금액에 잔금을 더한다.
+function getMergedBalance(){
+  return getBalanceMode() === 'merge' ? getBalanceAmount() : 0;
+}
+
+function updateBalanceSection(){
+  const mode = getBalanceMode();
+  if(mode === 'off') return;
+  const finalAmount = Math.round(parseNum(document.getElementById('finalAmount').textContent));
+  const balance = getBalanceAmount();
+  const trade = mode === 'merge' ? finalAmount - balance : finalAmount;
+  const total = mode === 'merge' ? finalAmount : finalAmount + balance;
+  document.getElementById('balanceTrade').textContent = fmt(trade);
+  document.getElementById('balanceTotal').textContent = fmt(total);
+  document.getElementById('balanceTotalLabel').textContent = mode === 'separate' ? '잔금 포함 잔액' : '잔금 포함 합계';
+}
+
+function syncBalanceMode(mode){
+  const m = (mode === 'merge' || mode === 'separate') ? mode : 'off';
+  document.documentElement.setAttribute('data-balance-mode', m);
+  const select = document.getElementById('balanceModeSelect');
+  if(select){
+    select.value = m;
+    Array.from(select.options).forEach(option=>{
+      option.selected = option.value === m;
+      if(option.selected) option.setAttribute('selected', '');
+      else option.removeAttribute('selected');
+    });
+  }
+  updateBalanceSection();
+}
+
+function changeBalanceMode(mode){
+  syncBalanceMode(mode);
+  calcAll();
+  adjustNameSpecColumns();
+}
+
+(function bindBalanceCell(){
+  const cell = document.getElementById('balanceAmount');
+  if(!cell) return;
+  cell.addEventListener('input', function(){ formatPriceCell(cell); calcAll(); });
+  cell.addEventListener('blur', function(){ cell.textContent = fmt(getBalanceAmount()); calcAll(); });
+  cell.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); cell.blur(); } });
+})();
+
+document.addEventListener('DOMContentLoaded', function(){
+  syncBalanceMode(document.documentElement.getAttribute('data-balance-mode'));
 });
 
 // 현재 작성 상태를 그대로 포함한 수정 가능한 HTML 파일로 저장
@@ -2582,19 +2678,21 @@ window.deleteCompanyLogo = function(){
   function qv_capture(){
     if(document.activeElement?.blur)document.activeElement.blur();
     const sheet=$('.sheet');
-    const editable=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody')).map(el=>el.innerHTML);
+    const editable=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody')&&!el.closest('#balanceSection')).map(el=>el.innerHTML);
     const rows=all('#itemsBody tr').map(tr=>({manual:tr.dataset.manualTotal==='true',manualSupply:tr.dataset.manualSupply,manualTax:tr.dataset.manualTax,cells:Array.from(tr.cells).map(td=>td.innerHTML)}));
     const rootStyle=document.documentElement.getAttribute('style')||'';
-    return {schema:1,vatMode:isVatSeparate()?'separate':'included',documentType:$('#documentTypeSelect')?.value||'estimate',editable,rows,rootStyle,bodyStyle:document.body.getAttribute('style')||'',sheetStyle:sheet?.getAttribute('style')||'',logo:{src:$('.logo img')?.getAttribute('src')||'',style:$('.logo img')?.getAttribute('style')||''},stamp:{src:$('.stamp-img')?.getAttribute('src')||'',style:$('.stamp-img')?.getAttribute('style')||''},sheetClass:sheet?.className||'sheet'};
+    return {schema:1,balanceMode:getBalanceMode(),balanceAmount:qv_text($('#balanceAmount')),vatMode:isVatSeparate()?'separate':'included',documentType:$('#documentTypeSelect')?.value||'estimate',editable,rows,rootStyle,bodyStyle:document.body.getAttribute('style')||'',sheetStyle:sheet?.getAttribute('style')||'',logo:{src:$('.logo img')?.getAttribute('src')||'',style:$('.logo img')?.getAttribute('style')||''},stamp:{src:$('.stamp-img')?.getAttribute('src')||'',style:$('.stamp-img')?.getAttribute('style')||''},sheetClass:sheet?.className||'sheet'};
   }
   function qv_meta(){return {recipient:qv_text($('.recipient span[contenteditable]')),date:[qv_text($('#y')),qv_text($('#m')),qv_text($('#d'))].join('-'),docno:qv_text($('#docno')),total:qv_text($('#finalAmount')),documentType:$('#documentTypeSelect')?.value||'estimate'};}
   function qv_restoreState(state){
     if(!state||state.schema!==1)throw new Error('지원하지 않는 백업 형식입니다.');
     syncVatMode(state.vatMode || 'included');
+    if($('#balanceAmount'))$('#balanceAmount').textContent=state.balanceAmount||'0';
+    syncBalanceMode(state.balanceMode||'off');
     const body=$('#itemsBody'); body.innerHTML=''; window.rowCount=0;
     (state.rows||[]).forEach(row=>{const tr=makeRow();row.cells.forEach((html,i)=>{if(tr.cells[i])tr.cells[i].innerHTML=html;});if(row.manual){tr.dataset.manualTotal='true';if(row.manualSupply != null && row.manualTax != null){tr.dataset.manualSupply=String(row.manualSupply);tr.dataset.manualTax=String(row.manualTax);}}body.appendChild(tr);});
     if($('#documentTypeSelect')&&typeof window.changeDocumentType==='function'){changeDocumentType(state.documentType||'estimate');$('#documentTypeSelect').value=state.documentType||'estimate';}
-    const editables=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody'));
+    const editables=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody')&&!el.closest('#balanceSection'));
     (state.editable||[]).forEach((html,i)=>{if(editables[i])editables[i].innerHTML=html;});
     document.documentElement.setAttribute('style',state.rootStyle||'');document.body.setAttribute('style',state.bodyStyle||'');if($('.sheet'))$('.sheet').setAttribute('style',state.sheetStyle||'');
     const logo=$('.logo img'),stamp=$('.stamp-img');if(logo){logo.setAttribute('src',state.logo?.src||'');logo.setAttribute('style',state.logo?.style||'');}if(stamp){stamp.setAttribute('src',state.stamp?.src||'');stamp.setAttribute('style',state.stamp?.style||'');}
