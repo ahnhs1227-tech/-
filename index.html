@@ -1058,6 +1058,12 @@ table.balance td[contenteditable]:focus{ background:#fffde7; }
 @media print{ .stamp-cell:focus-within{ background:transparent !important; } }
 .pdf-capture-stage .stamp-cell{ background:transparent !important; }
 </style>
+<style id="supplier-fixed-columns-style">
+/* 공급자 표: 칸 크기 고정. 내용을 지워도 열 폭이 변하지 않고, 길면 칸 안에서 두 줄로 넘어감 */
+table.supplier{ table-layout:fixed !important; }
+table.supplier td{ white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
+table.supplier td.label, table.supplier td.side-label{ overflow-wrap:normal; }
+</style>
 </head>
 <body>
 
@@ -1169,6 +1175,13 @@ table.balance td[contenteditable]:focus{ background:#fffde7; }
 
     
 <table class="supplier">
+      <colgroup>
+        <col style="width:33px">
+        <col style="width:58px">
+        <col style="width:151px">
+        <col style="width:58px">
+        <col style="width:162px">
+      </colgroup>
       <tr>
         <td class="side-label" rowspan="5">공&nbsp;급&nbsp;자</td>
         <td class="label">등록<br>번호</td>
