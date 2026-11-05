@@ -1047,6 +1047,17 @@ table.balance td[contenteditable]{ outline:none; }
 table.balance td[contenteditable]:focus{ background:#fffde7; }
 @media print{ table.balance td{ border-color:var(--line) !important; } }
 </style>
+<style id="empty-field-fix-style">
+/* 내용을 모두 지워도 다시 클릭해서 입력할 수 있도록 최소 클릭 영역 확보 */
+.stamp-cell .stamp-name{ display:block; min-height:1.2em; }
+.stamp-cell{ cursor:text; }
+.stamp-cell:focus-within{ background:#fffde7; }
+.docno span[contenteditable]{ display:inline-block; min-width:80px; }
+.meta-row span[contenteditable]{ min-width:56px; }
+.date-line span[contenteditable]{ display:inline-block; min-width:1.2em; }
+@media print{ .stamp-cell:focus-within{ background:transparent !important; } }
+.pdf-capture-stage .stamp-cell{ background:transparent !important; }
+</style>
 </head>
 <body>
 
@@ -1078,6 +1089,7 @@ table.balance td[contenteditable]:focus{ background:#fffde7; }
   <button type="button" class="secondary" onclick="document.getElementById('logoFileInput').click()">🖼 로고 변경</button>
   <button type="button" class="secondary" onclick="deleteCompanyLogo()">✕ 로고 삭제</button>
   <button type="button" class="secondary" onclick="document.getElementById('stampFileInput').click()">🔴 도장 변경</button>
+  <button type="button" class="secondary" onclick="deleteCompanyStamp()">✕ 도장 삭제</button>
   <button type="button" class="secondary" onclick="toggleColorPanel()">🎨 배경색 변경</button>
   <button type="button" onclick="saveEditableFile()">💾 수정가능 파일 저장</button>
   <button class="secondary" onclick="saveFixedPdf()">📄 고정형 PDF 저장</button>
@@ -1118,9 +1130,9 @@ table.balance td[contenteditable]:focus{ background:#fffde7; }
   </div>
 
   <div class="meta-row">
-    담당자: <span contenteditable="true">안혜수</span>&nbsp;
-    M: <span contenteditable="true">010-5676-1812</span>&nbsp;
-    E: <span contenteditable="true">designmodi@naver.com</span>
+    담당자: <span contenteditable="true" id="contactName">안혜수</span>&nbsp;
+    M: <span contenteditable="true" id="contactTel">010-5676-1812</span>&nbsp;
+    E: <span contenteditable="true" id="contactEmail">designmodi@naver.com</span>
   </div>
 
   <div class="supplier-controls no-print">
@@ -2048,6 +2060,8 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
       fileToDataUrl(this.files && this.files[0], function(dataUrl){
         document.querySelectorAll('.stamp-img').forEach(function(img){
           img.src = dataUrl;
+          img.style.visibility = '';
+          img.style.display = '';
         });
       });
       this.value = '';
@@ -2402,6 +2416,9 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
       bizItem:val('supplierBizItem'),
       tel:val('supplierTel'),
       fax:val('supplierFax'),
+      contactName:val('contactName'),
+      contactTel:val('contactTel'),
+      contactEmail:val('contactEmail'),
       stampSrc:document.querySelector('.supplier .stamp-img')?.src || '',
       logoSrc:document.querySelector('.logo img')?.src || ''
     };
@@ -2417,6 +2434,10 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
     setVal('supplierBizItem',data.bizItem);
     setVal('supplierTel',data.tel);
     setVal('supplierFax',data.fax);
+    // 담당자 정보는 공급자와 함께 바뀐다. (예전에 저장한 목록처럼 값이 없으면 현재 값을 유지)
+    if(data.contactName!==undefined) setVal('contactName',data.contactName);
+    if(data.contactTel!==undefined) setVal('contactTel',data.contactTel);
+    if(data.contactEmail!==undefined) setVal('contactEmail',data.contactEmail);
     const stamp=document.querySelector('.supplier .stamp-img');
     if(stamp){
       if(data.stampSrc){
@@ -2458,9 +2479,9 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
   }
 
   window.clearSupplierInfo=function(){
-    if(!confirm('현재 공급자 정보를 모두 비울까요?\\n저장해 둔 공급자 목록은 삭제되지 않습니다.')) return;
+    if(!confirm('현재 공급자 정보를 모두 비울까요?\n저장해 둔 공급자 목록은 삭제되지 않습니다.')) return;
     applySupplier({
-      regNo:'',company:'',name:'',address:'',bizType:'',bizItem:'',tel:'',fax:'',stampSrc:'',logoSrc:''
+      regNo:'',company:'',name:'',address:'',bizType:'',bizItem:'',tel:'',fax:'',contactName:'',contactTel:'',contactEmail:'',stampSrc:'',logoSrc:''
     });
     const stamp=document.querySelector('.supplier .stamp-img');
     if(stamp) stamp.style.visibility='hidden';
@@ -2618,6 +2639,33 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
 
 
 <script id="logo-delete-script">
+window.deleteCompanyStamp = function(){
+  const stamp = document.querySelector('.stamp-img');
+  if(!stamp) return;
+  if(!window.confirm('현재 도장을 삭제할까요?')) return;
+  stamp.removeAttribute('src');
+  stamp.style.visibility = 'hidden';
+};
+
+// 성명 칸은 셀 어디를 눌러도(도장 자리 포함) 이름 입력 영역으로 포커스
+(function bindStampCellFocus(){
+  const cell = document.querySelector('.stamp-cell');
+  const name = document.getElementById('supplierName');
+  if(!cell || !name) return;
+  cell.addEventListener('click', function(e){
+    if(e.target === name || name.contains(e.target)) return;
+    name.focus();
+    const sel = window.getSelection();
+    if(sel){
+      const range = document.createRange();
+      range.selectNodeContents(name);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  });
+})();
+
 window.deleteCompanyLogo = function(){
   const logo = document.querySelector('.logo img');
   if(!logo) return;
