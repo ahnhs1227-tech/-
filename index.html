@@ -1071,7 +1071,7 @@ table.supplier td.label, table.supplier td.side-label{ overflow-wrap:normal; }
 .bank-row{
   display:flex; align-items:baseline; gap:8px;
   padding:6px 8px;
-  border-top:1px solid var(--line-light);
+  border-top:1px solid var(--line);
   font-size:12.5px;
 }
 .bank-label{ font-weight:700; white-space:nowrap; }
@@ -1080,10 +1080,14 @@ table.supplier td.label, table.supplier td.side-label{ overflow-wrap:normal; }
 .bank-value:hover{ background:#f6f6f6; }
 .bank-value:focus{ background:#fffde7; }
 @media print{ .bank-value:hover{ background:transparent !important; } }
+/* 입금계좌 줄 = 우측 '참조' 줄과 같은 높이/같은 선에 맞춤 (조건표 4줄 높이를 고정) */
+table.foot-terms td{ height:32px; }
+.foot-note-main .foot-note-body{ min-height:0; }
+.bank-row{ box-sizing:border-box; height:32px; align-items:center; padding-top:0; padding-bottom:0; }
 /* 표시안함: 화면 / 인쇄 / PDF 모두에서 숨김 */
 html[data-bank-mode="hide"] .bank-row{ display:none; }
 @media print{
-  .bank-row{ border-top:1px solid var(--line-light) !important; }
+  .bank-row{ border-top:1.25px solid var(--line) !important; }
 }
 </style>
 </head>
