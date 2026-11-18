@@ -1064,6 +1064,28 @@ table.supplier{ table-layout:fixed !important; }
 table.supplier td{ white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
 table.supplier td.label, table.supplier td.side-label{ overflow-wrap:normal; }
 </style>
+<style id="bank-account-style">
+/* 비고란 하단 입금계좌 */
+.foot-note-main{ flex:1; min-width:0; display:flex; flex-direction:column; }
+.foot-note-main .foot-note-body{ flex:1; }
+.bank-row{
+  display:flex; align-items:baseline; gap:8px;
+  padding:6px 8px;
+  border-top:1px solid var(--line-light);
+  font-size:12.5px;
+}
+.bank-label{ font-weight:700; white-space:nowrap; }
+.bank-value{ flex:1; min-width:40px; min-height:1.2em; outline:none; }
+.bank-value{ cursor:text; }
+.bank-value:hover{ background:#f6f6f6; }
+.bank-value:focus{ background:#fffde7; }
+@media print{ .bank-value:hover{ background:transparent !important; } }
+/* 표시안함: 화면 / 인쇄 / PDF 모두에서 숨김 */
+html[data-bank-mode="hide"] .bank-row{ display:none; }
+@media print{
+  .bank-row{ border-top:1px solid var(--line-light) !important; }
+}
+</style>
 </head>
 <body>
 
@@ -1088,6 +1110,13 @@ table.supplier td.label, table.supplier td.side-label{ overflow-wrap:normal; }
       <option value="off" selected>잔금 없음</option>
       <option value="merge">잔금 합산 (상단 금액에 포함)</option>
       <option value="separate">잔금 별도표기 (상단은 당거래액만)</option>
+    </select>
+  </label>
+  <label class="document-type-control" style="margin-right:0">
+    <span>입금계좌</span>
+    <select id="bankModeSelect" onchange="changeBankMode(this.value)" aria-label="입금계좌 표시 여부">
+      <option value="show" selected>표시</option>
+      <option value="hide">표시안함</option>
     </select>
   </label>
   <button type="button" onclick="qv_saveCurrentEstimate()">💾 현재 견적 저장</button>
@@ -1272,7 +1301,13 @@ table.supplier td.label, table.supplier td.side-label{ overflow-wrap:normal; }
 
   <div class="foot-grid">
     <div class="foot-note-label">비&nbsp;고</div>
-    <div class="foot-note-body" contenteditable="true"></div>
+    <div class="foot-note-main">
+      <div class="foot-note-body" contenteditable="true"></div>
+      <div class="bank-row" id="bankRow">
+        <span class="bank-label">입금계좌</span>
+        <span class="bank-value" id="bankAccount" contenteditable="true">국민은행 217001-04-190232 안혜수(모디)</span>
+      </div>
+    </div>
     <table class="foot-terms">
       <tr><td class="label" id="termLabel1">납기일</td><td contenteditable="true"></td></tr>
       <tr><td class="label" id="termLabel2">유효일</td><td contenteditable="true"></td></tr>
@@ -1874,6 +1909,33 @@ document.addEventListener('DOMContentLoaded', function(){
   syncBalanceMode(document.documentElement.getAttribute('data-balance-mode'));
 });
 
+// ===== 입금계좌 표시/표시안함 =====
+function getBankMode(){
+  return document.documentElement.getAttribute('data-bank-mode') === 'hide' ? 'hide' : 'show';
+}
+
+function syncBankMode(mode){
+  const m = mode === 'hide' ? 'hide' : 'show';
+  document.documentElement.setAttribute('data-bank-mode', m);
+  const select = document.getElementById('bankModeSelect');
+  if(select){
+    select.value = m;
+    Array.from(select.options).forEach(option=>{
+      option.selected = option.value === m;
+      if(option.selected) option.setAttribute('selected', '');
+      else option.removeAttribute('selected');
+    });
+  }
+}
+
+function changeBankMode(mode){
+  syncBankMode(mode);
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  syncBankMode(document.documentElement.getAttribute('data-bank-mode'));
+});
+
 // 현재 작성 상태를 그대로 포함한 수정 가능한 HTML 파일로 저장
 function saveEditableFile(){
   // 현재 편집 중인 셀의 내용을 확정
@@ -2432,6 +2494,7 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
       contactName:val('contactName'),
       contactTel:val('contactTel'),
       contactEmail:val('contactEmail'),
+      bankAccount:val('bankAccount'),
       stampSrc:document.querySelector('.supplier .stamp-img')?.src || '',
       logoSrc:document.querySelector('.logo img')?.src || ''
     };
@@ -2451,6 +2514,8 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
     if(data.contactName!==undefined) setVal('contactName',data.contactName);
     if(data.contactTel!==undefined) setVal('contactTel',data.contactTel);
     if(data.contactEmail!==undefined) setVal('contactEmail',data.contactEmail);
+    // 입금계좌도 공급자와 함께 바뀐다. (예전에 저장한 목록처럼 값이 없으면 현재 값을 유지)
+    if(data.bankAccount!==undefined) setVal('bankAccount',data.bankAccount);
     const stamp=document.querySelector('.supplier .stamp-img');
     if(stamp){
       if(data.stampSrc){
@@ -2494,7 +2559,7 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
   window.clearSupplierInfo=function(){
     if(!confirm('현재 공급자 정보를 모두 비울까요?\n저장해 둔 공급자 목록은 삭제되지 않습니다.')) return;
     applySupplier({
-      regNo:'',company:'',name:'',address:'',bizType:'',bizItem:'',tel:'',fax:'',contactName:'',contactTel:'',contactEmail:'',stampSrc:'',logoSrc:''
+      regNo:'',company:'',name:'',address:'',bizType:'',bizItem:'',tel:'',fax:'',contactName:'',contactTel:'',contactEmail:'',bankAccount:'',stampSrc:'',logoSrc:''
     });
     const stamp=document.querySelector('.supplier .stamp-img');
     if(stamp) stamp.style.visibility='hidden';
@@ -2613,6 +2678,7 @@ if(document.fonts) document.fonts.ready.then(adjustNameSpecColumns);
       const assetInfo=[];
       if(item.data?.logoSrc) assetInfo.push('로고');
       if(item.data?.stampSrc) assetInfo.push('도장');
+      if(item.data?.bankAccount) assetInfo.push('계좌');
       sub.textContent=[
         item.data?.company,
         item.data?.regNo,
@@ -2739,10 +2805,10 @@ window.deleteCompanyLogo = function(){
   function qv_capture(){
     if(document.activeElement?.blur)document.activeElement.blur();
     const sheet=$('.sheet');
-    const editable=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody')&&!el.closest('#balanceSection')).map(el=>el.innerHTML);
+    const editable=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody')&&!el.closest('#balanceSection')&&!el.closest('#bankRow')).map(el=>el.innerHTML);
     const rows=all('#itemsBody tr').map(tr=>({manual:tr.dataset.manualTotal==='true',manualSupply:tr.dataset.manualSupply,manualTax:tr.dataset.manualTax,cells:Array.from(tr.cells).map(td=>td.innerHTML)}));
     const rootStyle=document.documentElement.getAttribute('style')||'';
-    return {schema:1,balanceMode:getBalanceMode(),balanceAmount:qv_text($('#balanceAmount')),vatMode:isVatSeparate()?'separate':'included',documentType:$('#documentTypeSelect')?.value||'estimate',editable,rows,rootStyle,bodyStyle:document.body.getAttribute('style')||'',sheetStyle:sheet?.getAttribute('style')||'',logo:{src:$('.logo img')?.getAttribute('src')||'',style:$('.logo img')?.getAttribute('style')||''},stamp:{src:$('.stamp-img')?.getAttribute('src')||'',style:$('.stamp-img')?.getAttribute('style')||''},sheetClass:sheet?.className||'sheet'};
+    return {schema:1,balanceMode:getBalanceMode(),balanceAmount:qv_text($('#balanceAmount')),bankMode:getBankMode(),bankAccount:($('#bankAccount')?.innerHTML||''),vatMode:isVatSeparate()?'separate':'included',documentType:$('#documentTypeSelect')?.value||'estimate',editable,rows,rootStyle,bodyStyle:document.body.getAttribute('style')||'',sheetStyle:sheet?.getAttribute('style')||'',logo:{src:$('.logo img')?.getAttribute('src')||'',style:$('.logo img')?.getAttribute('style')||''},stamp:{src:$('.stamp-img')?.getAttribute('src')||'',style:$('.stamp-img')?.getAttribute('style')||''},sheetClass:sheet?.className||'sheet'};
   }
   function qv_meta(){return {recipient:qv_text($('.recipient span[contenteditable]')),date:[qv_text($('#y')),qv_text($('#m')),qv_text($('#d'))].join('-'),docno:qv_text($('#docno')),total:qv_text($('#finalAmount')),documentType:$('#documentTypeSelect')?.value||'estimate'};}
   function qv_restoreState(state){
@@ -2750,10 +2816,12 @@ window.deleteCompanyLogo = function(){
     syncVatMode(state.vatMode || 'included');
     if($('#balanceAmount'))$('#balanceAmount').textContent=state.balanceAmount||'0';
     syncBalanceMode(state.balanceMode||'off');
+    syncBankMode(state.bankMode||'show');
+    if(state.bankAccount!=null&&$('#bankAccount'))$('#bankAccount').innerHTML=state.bankAccount;
     const body=$('#itemsBody'); body.innerHTML=''; window.rowCount=0;
     (state.rows||[]).forEach(row=>{const tr=makeRow();row.cells.forEach((html,i)=>{if(tr.cells[i])tr.cells[i].innerHTML=html;});if(row.manual){tr.dataset.manualTotal='true';if(row.manualSupply != null && row.manualTax != null){tr.dataset.manualSupply=String(row.manualSupply);tr.dataset.manualTax=String(row.manualTax);}}body.appendChild(tr);});
     if($('#documentTypeSelect')&&typeof window.changeDocumentType==='function'){changeDocumentType(state.documentType||'estimate');$('#documentTypeSelect').value=state.documentType||'estimate';}
-    const editables=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody')&&!el.closest('#balanceSection'));
+    const editables=all('.sheet [contenteditable="true"]').filter(el=>!el.closest('#itemsBody')&&!el.closest('#balanceSection')&&!el.closest('#bankRow'));
     (state.editable||[]).forEach((html,i)=>{if(editables[i])editables[i].innerHTML=html;});
     document.documentElement.setAttribute('style',state.rootStyle||'');document.body.setAttribute('style',state.bodyStyle||'');if($('.sheet'))$('.sheet').setAttribute('style',state.sheetStyle||'');
     const logo=$('.logo img'),stamp=$('.stamp-img');if(logo){logo.setAttribute('src',state.logo?.src||'');logo.setAttribute('style',state.logo?.style||'');}if(stamp){stamp.setAttribute('src',state.stamp?.src||'');stamp.setAttribute('style',state.stamp?.style||'');}
